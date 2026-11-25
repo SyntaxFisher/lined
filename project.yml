@@ -1,0 +1,33 @@
+name: Lined
+options:
+  deploymentTarget:
+    iOS: "27.0"
+  createIntermediateGroups: true
+packages:
+  LinedKit:
+    path: Packages/LinedKit
+targets:
+  Lined:
+    type: application
+    platform: iOS
+    sources:
+      - App
+    configFiles:
+      Debug: Config/Lined.xcconfig
+      Release: Config/Lined.xcconfig
+    dependencies:
+      - package: LinedKit
+        product: LinedModel
+      - package: LinedKit
+        product: LinedStorage
+      - package: LinedKit
+        product: LinedRendering
+      - package: LinedKit
+        product: LinedLayout
+schemes:
+  Lined:
+    build:
+      targets:
+        Lined: all
+    run:
+      config: Debug
