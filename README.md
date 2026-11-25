@@ -5,6 +5,12 @@ You write, annotate and study with Apple Pencil, and the AI is part of the page 
 
 Lined is in early development and not available yet.
 
+## What works today
+
+- A library with nested folders and notebook covers.
+- Notebooks on blank, lined, squared or dotted paper, and notebooks made from imported PDFs.
+- Handwriting with Apple Pencil on every page, sharp at any zoom, saved as you write.
+
 ## Planned features
 
 - Handwritten notes, PDFs, pages and tabs, built for Apple Pencil.
@@ -15,6 +21,10 @@ Lined is in early development and not available yet.
 
 - An iPad with Apple Pencil.
 - A ChatGPT plan. Lined uses Sign in with ChatGPT, so the AI runs on your own subscription and there is no separate AI fee.
+
+## Development
+
+Lined is a native iPadOS app written in Swift. See [docs/development.md](docs/development.md) to build it.
 
 ## License
 

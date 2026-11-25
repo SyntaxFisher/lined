@@ -1,0 +1,55 @@
+# Development
+
+## Requirements
+
+- Xcode 27.2 or later with the iPadOS 27 SDK and an iPad simulator.
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen), for example through `brew install xcodegen`.
+
+## Commands
+
+```sh
+make            # list the commands
+make test       # unit tests of the LinedKit package, on the Mac
+make build      # generate the project and build for the simulator
+make run        # build, install and launch in the simulator
+```
+
+`SIMULATOR` selects the simulator by name or identifier: `make run SIMULATOR="iPad Air 11-inch (M4)"`.
+
+## Project file
+
+`Lined.xcodeproj` is generated from `project.yml` and not checked in, so the project is defined by
+text that can be reviewed and merged. Run `make project` after adding, moving or removing files and
+before opening the project in Xcode. Build settings live in `Config/Lined.xcconfig`.
+
+The repository carries a placeholder bundle identifier and no signing team. To run on a device, create
+`Config/Local.xcconfig`, which Git ignores:
+
+```
+PRODUCT_BUNDLE_IDENTIFIER = com.yourname.lined
+DEVELOPMENT_TEAM = ABCDE12345
+```
+
+## Layout
+
+```
+App/                 the app target: SwiftUI interface and the UIKit canvas
+Packages/LinedKit/   model, storage, rendering and layout, with tests
+Config/              build settings
+docs/                developer documentation
+project.yml          project definition for XcodeGen
+```
+
+[architecture.md](architecture.md) explains the modules and the canvas, [storage.md](storage.md)
+the format on disk.
+
+## Tests
+
+The package tests run on the Mac with Swift Testing and cover the model's invariants, the storage
+round trips and recovery paths, the rendering of paper and PDF pages, and the canvas geometry.
+Logic belongs in the package so that it can be tested this way; the app target holds interface and
+wiring.
+
+Interface changes are checked in the simulator. Finger drawing is on by default there, since the
+simulator has no Apple Pencil: one finger draws and two fingers scroll and zoom. On a device the
+default is Apple Pencil only.
