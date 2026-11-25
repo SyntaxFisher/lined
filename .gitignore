@@ -2,7 +2,11 @@
 xcuserdata/
 DerivedData/
 build/
+.build/
+.swiftpm/
+*.xcodeproj
 *.xcuserstate
+Config/Local.xcconfig
 .env
 .env.*
 AGENTS.local.md
