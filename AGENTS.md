@@ -6,7 +6,7 @@
 
 ## Commands
 
-- `make test` runs the unit tests of the `LinedKit` package on the Mac.
+- `make test` runs the unit tests of the `LinedKit` package and of the scripts on the Mac.
 - `make build` generates `Lined.xcodeproj` from `project.yml` with XcodeGen and builds for the iPad simulator.
 - `make run` builds, installs and launches the app in the simulator. `SIMULATOR` selects it by name or identifier.
 - The project file is generated and ignored by Git. Run `make project` after adding, moving or removing files.
@@ -20,6 +20,10 @@
 - Page content is stored per page and keyed by page identifier, in page points with the origin at the top left. New kinds of content become new files in the notebook package.
 - Saved formats are versioned. Follow the rules in `docs/storage.md` when changing them.
 - Verify interface changes in an iPad simulator, where finger drawing stands in for Apple Pencil.
+
+## Releases
+
+- Internal TestFlight builds are described in `docs/testflight.md`. Each upload needs the owner's explicit consent for that build. They are internal-only and never submitted, published or tagged.
 
 ## Git workflow
 

@@ -9,7 +9,7 @@
 
 ```sh
 make            # list the commands
-make test       # unit tests of the LinedKit package, on the Mac
+make test       # unit tests of the LinedKit package and the scripts, on the Mac
 make build      # generate the project and build for the simulator
 make run        # build, install and launch in the simulator
 ```
@@ -22,8 +22,8 @@ make run        # build, install and launch in the simulator
 text that can be reviewed and merged. Run `make project` after adding, moving or removing files and
 before opening the project in Xcode. Build settings live in `Config/Lined.xcconfig`.
 
-The repository carries a placeholder bundle identifier and no signing team. To run on a device, create
-`Config/Local.xcconfig`, which Git ignores:
+The repository carries a placeholder bundle identifier and no signing team. To run on a device or
+upload a build, create `Config/Local.xcconfig`, which Git ignores:
 
 ```
 PRODUCT_BUNDLE_IDENTIFIER = com.yourname.lined
@@ -36,12 +36,13 @@ DEVELOPMENT_TEAM = ABCDE12345
 App/                 the app target: SwiftUI interface and the UIKit canvas
 Packages/LinedKit/   model, storage, rendering and layout, with tests
 Config/              build settings
+scripts/             release tooling, with tests
 docs/                developer documentation
 project.yml          project definition for XcodeGen
 ```
 
 [architecture.md](architecture.md) explains the modules and the canvas, [storage.md](storage.md)
-the format on disk.
+the format on disk and [testflight.md](testflight.md) how test builds reach an iPad.
 
 ## Tests
 
