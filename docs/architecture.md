@@ -42,34 +42,47 @@ mixed up.
 `PagedCanvasView` shows the pages as one vertical stack. A single `PKCanvasView` is the scroll view
 of the whole notebook, so scrolling, zooming and ink rendering are PencilKit's own and behave like
 they do in every other app. The canvas draws in document points: page points, offset by the place of
-the page in the stack. Its zoom scale is the number of screen points per document point.
+the page in the stack. Its zoom scale is the number of screen points per document point, and it
+ends at ten, which is as far as PencilKit magnifies a canvas.
 
 - **Virtualized pages.** Only the pages near the viewport have a background view. Views are reused,
   so memory and work do not grow with the length of the document.
 - **Virtualized ink.** The canvas holds only the strokes of the pages near the viewport. A page's
   stored ink is asked for before the page scrolls into view and given up when the page is far away,
   with a gap between the two distances so that a page does not load and unload while the view moves
-  back and forth. The ink in the canvas is never replaced while a tool is in use or a pinch is in
-  progress; what arrives meanwhile waits and is then placed beneath the strokes drawn meanwhile.
+  back and forth. Arriving ink is added to what the canvas holds. Taking ink out means putting the
+  rest together anew, so while the view scrolls, pages give their ink up several at a time. The ink
+  in the canvas is never replaced while a tool is in use, while the ink settles after it or while a
+  pinch is in progress; what arrives meanwhile waits.
 - **Pages of strokes.** A stroke belongs to the page it starts on, or to the nearest page when it
   starts between two. Moving ink between page points and document points only changes a stroke's
   transform, so strokes keep their identity and their eraser masks.
+- **Ink ends at the page.** A stroke that is drawn, moved or pasted beyond the edge of its page is
+  cut there once the tool has lifted: the stroke gets a mask in the shape of its page, and a stroke
+  that draws nothing on its page is dropped. Every stroke therefore lies inside one page, which is
+  what a page stores, exports and shows in its thumbnail.
 - **Backgrounds.** `PageBackgroundView` shows bitmaps rendered off the main thread, beneath the ink.
   A base image covers the whole page at screen resolution up to a pixel budget. Beyond that budget,
   a detail image at screen resolution covers the visible part of the page. An image stays on screen
   until its replacement is ready, and images are aligned to the pixel grid, so text is neither blank
   nor blurred while zooming. `BackgroundRenderPlanner` decides what to render; it is plain geometry
   and unit-tested.
-- **Desk.** `DeskMaskView` lies above the ink and covers everything that is not a page, so strokes
-  end at the edge of the paper.
+- **Desk.** `DeskView` lies above the ink and covers everything around the pages near the viewport
+  with plain rectangles, so a stroke that is being drawn ends at the edge of the paper. `Desk` works
+  the rectangles out; it is plain geometry and unit-tested.
 - **PDF.** Pages are drawn with CoreGraphics from the stored PDF file. Nothing is pre-rasterized, so
   import is fast and the page stays vector-sharp at any zoom.
 
 Apple Pencil draws and fingers scroll and zoom. With finger drawing switched on, one finger draws
 and two fingers scroll and zoom.
 
-Three properties of PencilKit shape the canvas:
+These properties of PencilKit shape the canvas:
 
+- Reading the ink of a canvas takes time with every stroke it holds, however little of it changed.
+  The canvas reads its ink once the writing pauses, not after every stroke, and keeps the number of
+  pages whose ink it holds small.
+- A canvas draws a stroke it already shows again only when the stroke's identity changes. A stroke
+  that is cut is therefore a new stroke.
 - PencilKit drops a lasso selection whenever its view is resized, so the canvas keeps its size when
   a keyboard appears.
 - PencilKit takes the focus while strokes are selected and accepts typed text there, which would
@@ -92,10 +105,15 @@ system settings.
 ## Undo
 
 A notebook keeps its own undo history, `InkHistory`, because the ink of a page leaves the canvas
-when the page is far away and an undo step must still reach it. The canvas compares its strokes with
-what it reported last and tells the session which pages changed; each report is one step with the
-ink of those pages before and after. An eraser or a lasso changes the ink many times while it moves
-and is reported once when it lifts, so it is one step.
+when the page is far away and an undo step must still reach it. The canvas tells the session which
+pages changed; each report is one step with the ink of those pages before and after.
+
+The canvas reports once its ink has settled, a moment after the tool has lifted. After plain
+writing it looks at the new strokes only, which lie on top of the ink it reported before, and
+reports each of them as a step of its own. An eraser or a lasso changes the ink many times while it
+moves; then the canvas compares all its strokes with what it reported last and reports the result
+once, so it is one step. Before the session undoes, redoes or saves, it asks the canvas for what is
+still waiting to be reported.
 
 Undoing puts the earlier ink back into the store and, where the page is loaded, into the canvas.
 The steps of a deleted page are forgotten with it.
