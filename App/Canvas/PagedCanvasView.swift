@@ -536,28 +536,30 @@ final class PagedCanvasView: UIView {
         return Array(strokes[reportedInk.count...])
     }
 
-    /// Cuts off what was drawn beyond the edge of a page and tells the notebook which pages' ink
-    /// differs from what it was told last.
+    /// Splits what was drawn across the edge of a page into one stroke on each page and tells the
+    /// notebook which pages' ink differs from what it was told last.
     ///
-    /// After plain drawing, that takes a look at the new strokes only, and each of them is a step
-    /// of its own to undo. After anything else, all the ink of the canvas is compared with the record.
+    /// After plain drawing, that takes a look at the new strokes only, and each of them, with all
+    /// its parts, is a step of its own to undo. After anything else, all the ink of the canvas is
+    /// compared with the record.
     private func reportInkChanges() {
         hasUnreportedInk = false
         var strokes = canvas.drawing.strokes
-        if var drawn = strokesDrawn(onTopOfReportedInkIn: strokes) {
+        if let drawn = strokesDrawn(onTopOfReportedInkIn: strokes) {
             guard !drawn.isEmpty else { return }
-            if let kept = DocumentInk.strokesKeptOnPages(drawn, layout: layout) {
-                strokes.replaceSubrange((strokes.count - drawn.count)..., with: kept)
-                drawn = kept
+            let steps = drawn.map { DocumentInk.strokesSplitAtPages([$0], layout: layout) ?? [$0] }
+            let parts = steps.flatMap { $0 }
+            if parts.map(\.id) != drawn.map(\.id) {
+                strokes.replaceSubrange((strokes.count - drawn.count)..., with: parts)
                 replaceInk(with: strokes)
             }
-            for stroke in drawn {
-                tellNotebook(inkRecord.add([stroke], layout: layout, pageIDs: pageIDs))
+            for step in steps where !step.isEmpty {
+                tellNotebook(inkRecord.add(step, layout: layout, pageIDs: pageIDs))
             }
         } else {
-            if let kept = DocumentInk.strokesKeptOnPages(strokes, layout: layout) {
-                strokes = kept
-                replaceInk(with: kept)
+            if let split = DocumentInk.strokesSplitAtPages(strokes, layout: layout) {
+                strokes = split
+                replaceInk(with: split)
             }
             tellNotebook(inkRecord.compare(with: strokes, layout: layout, pageIDs: pageIDs))
         }
@@ -724,7 +726,7 @@ extension PagedCanvasView: PKCanvasViewDelegate {
     }
 
     /// The ink is not looked at here. An eraser or a lasso changes it many times while it moves,
-    /// and what it did is one step to undo; a stroke may have to be cut at the edge of its page
+    /// and what it did is one step to undo; a stroke may have to be split at the edge of its page
     /// before it is reported; and while the writing goes on, nothing is to hold it up.
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
         guard !isReplacingInk else { return }

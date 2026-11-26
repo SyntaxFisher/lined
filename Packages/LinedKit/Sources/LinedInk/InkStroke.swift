@@ -2,7 +2,8 @@ import CoreGraphics
 
 /// What the page logic needs to know about a stroke of ink, whatever draws it.
 public protocol InkStroke {
-    /// Where the stroke starts, in the coordinates of the drawing that holds it.
+    /// Where the stroke starts, in the coordinates of the drawing that holds it. For a stroke that
+    /// was cut, where what is left of it starts.
     var start: CGPoint { get }
 
     /// The smallest rectangle that holds everything the stroke draws.

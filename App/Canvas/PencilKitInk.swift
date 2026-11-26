@@ -7,8 +7,11 @@ typealias PageInkChange = InkChange<Page.ID, PKStroke>
 
 nonisolated extension PKStroke: @retroactive InkStroke {
     public var start: CGPoint {
-        guard let first = path.first else { return renderBounds.origin }
-        return first.location.applying(transform)
+        guard let mask else {
+            return path.first?.location.applying(transform) ?? renderBounds.origin
+        }
+        let visible = path.first { mask.contains($0.location) }?.location ?? CGPoint(x: mask.bounds.midX, y: mask.bounds.midY)
+        return visible.applying(transform)
     }
 
     public var bounds: CGRect { renderBounds }
@@ -20,6 +23,7 @@ nonisolated extension PKStroke: @retroactive InkStroke {
     }
 
     /// A stroke is cut with its mask, which PencilKit keeps in the coordinates of the stroke's path.
+    /// The rest of the stroke still has the whole path, and starts where its path enters the mask.
     ///
     /// The cut stroke is a new stroke with an identity of its own: a canvas draws a stroke it
     /// already shows again only when the stroke's identity changes.

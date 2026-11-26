@@ -109,45 +109,62 @@ struct InkFingerprintTests {
         let second = layout.frame(ofPageAt: 1)
         let strokes = [TestStroke(20, 30, reach: CGVector(dx: 100, dy: 50)), TestStroke(second.minX, second.minY, reach: CGVector(dx: second.width, dy: second.height))]
 
-        #expect(DocumentInk.strokesKeptOnPages(strokes, layout: layout) == nil)
+        #expect(DocumentInk.strokesSplitAtPages(strokes, layout: layout) == nil)
     }
 
-    @Test func cutsAStrokeAtTheEdgeOfItsPage() throws {
+    @Test func splitsAStrokeDrawnIntoTheNextPage() throws {
         let first = layout.frame(ofPageAt: 0)
+        let second = layout.frame(ofPageAt: 1)
         let intoTheNextPage = TestStroke(first.minX + 100, first.maxY - 30, reach: CGVector(dx: 50, dy: 200))
         let untouched = TestStroke(first.minX + 5, first.minY + 5, reach: CGVector(dx: 10, dy: 10))
 
-        let kept = try #require(DocumentInk.strokesKeptOnPages([untouched, intoTheNextPage], layout: layout))
+        let split = try #require(DocumentInk.strokesSplitAtPages([untouched, intoTheNextPage], layout: layout))
 
-        #expect(kept.count == 2)
-        #expect(kept[0] == untouched)
-        #expect(kept[1].bounds == CGRect(x: first.minX + 100, y: first.maxY - 30, width: 50, height: 30))
-        #expect(DocumentInk.pageIndex(of: kept[1], layout: layout) == 0)
+        #expect(split.count == 3)
+        #expect(split[0] == untouched)
+        #expect(split[1].bounds == CGRect(x: first.minX + 100, y: first.maxY - 30, width: 50, height: 30))
+        #expect(split[2].bounds == CGRect(x: first.minX + 100, y: second.minY, width: 50, height: first.maxY + 170 - second.minY))
+        #expect(split.map { DocumentInk.pageIndex(of: $0, layout: layout) } == [0, 0, 1])
     }
 
-    @Test func cutsAStrokeAtTheSidesOfItsPage() throws {
+    @Test func splitsAStrokeAcrossSeveralPages() throws {
+        let first = layout.frame(ofPageAt: 0)
+        let throughTheSecondPage = TestStroke(first.minX + 100, first.maxY - 30, reach: CGVector(dx: 0, dy: 900))
+
+        let split = try #require(DocumentInk.strokesSplitAtPages([throughTheSecondPage], layout: layout))
+
+        #expect(split.map { DocumentInk.pageIndex(of: $0, layout: layout) } == [0, 1, 2])
+        for (index, part) in split.enumerated() {
+            #expect(layout.frame(ofPageAt: index).contains(part.bounds))
+        }
+    }
+
+    @Test func dropsWhatAStrokeDrawsBesideThePages() throws {
         let second = layout.frame(ofPageAt: 1)
         let acrossThePage = TestStroke(second.minX - 40, second.minY + 10, reach: CGVector(dx: second.width + 80, dy: 20))
 
-        let kept = try #require(DocumentInk.strokesKeptOnPages([acrossThePage], layout: layout))
+        let split = try #require(DocumentInk.strokesSplitAtPages([acrossThePage], layout: layout))
 
-        #expect(kept.map(\.bounds) == [CGRect(x: second.minX, y: second.minY + 10, width: second.width, height: 20)])
+        #expect(split.map(\.bounds) == [CGRect(x: second.minX, y: second.minY + 10, width: second.width, height: 20)])
     }
 
-    @Test func dropsAStrokeThatDrawsNothingOnItsPage() {
+    @Test func aStrokeFromTheGapBelongsToThePageItDrawsOn() throws {
         let second = layout.frame(ofPageAt: 1)
         let fromTheGapUpwards = TestStroke(second.minX + 10, second.minY - 3, reach: CGVector(dx: 30, dy: -100))
 
-        #expect(DocumentInk.strokesKeptOnPages([fromTheGapUpwards], layout: layout) == [])
+        let split = try #require(DocumentInk.strokesSplitAtPages([fromTheGapUpwards], layout: layout))
+
+        #expect(split.count == 1)
+        #expect(DocumentInk.pageIndex(of: split[0], layout: layout) == 0)
     }
 
-    @Test func inkThatWasCutStaysAsItIs() throws {
+    @Test func inkThatWasSplitStaysAsItIs() throws {
         let first = layout.frame(ofPageAt: 0)
         let strokes = [TestStroke(first.minX + 100, first.maxY - 30, reach: CGVector(dx: 50, dy: 200))]
 
-        let kept = try #require(DocumentInk.strokesKeptOnPages(strokes, layout: layout))
+        let split = try #require(DocumentInk.strokesSplitAtPages(strokes, layout: layout))
 
-        #expect(DocumentInk.strokesKeptOnPages(kept, layout: layout) == nil)
+        #expect(DocumentInk.strokesSplitAtPages(split, layout: layout) == nil)
     }
 
     @Test func aFingerprintGrowsWithTheStrokesAddedToIt() {

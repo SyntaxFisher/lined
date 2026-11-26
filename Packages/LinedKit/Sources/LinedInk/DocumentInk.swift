@@ -5,7 +5,8 @@ import LinedLayout
 ///
 /// Pages store their ink in page points. The canvas draws in document points, where each page lies at
 /// its frame in the stack. A stroke belongs to the page it starts on, or to the nearest page when it
-/// starts between pages. Ink ends at the edge of its page: what a stroke draws beyond it is cut off.
+/// starts between pages. Ink ends at the edge of its page: a stroke drawn across several pages is
+/// split into one stroke on each of them.
 ///
 /// Pages are addressed by their index in the layout.
 public enum DocumentInk {
@@ -89,23 +90,23 @@ public enum DocumentInk {
         }
     }
 
-    /// Keeps every stroke inside the page it belongs to.
+    /// Splits the strokes that run past the edge of their page into one stroke on each page they
+    /// draw on. What a stroke draws beside the pages is dropped.
     ///
-    /// - Returns: The strokes, or `nil` when all of them lie inside their pages already.
-    public static func strokesKeptOnPages<Stroke: InkStroke>(_ strokes: [Stroke], layout: PageStackLayout) -> [Stroke]? {
-        var kept: [Stroke] = []
+    /// - Returns: The strokes, each one on a single page, or `nil` when all of them lie on a single
+    ///   page already. The parts of a stroke take its place, in the order of the pages.
+    public static func strokesSplitAtPages<Stroke: InkStroke>(_ strokes: [Stroke], layout: PageStackLayout) -> [Stroke]? {
+        var split: [Stroke] = []
         var isChanged = false
         for stroke in strokes {
-            guard let index = pageIndex(of: stroke, layout: layout) else { continue }
-            let page = layout.frame(ofPageAt: index)
-            if lies(stroke, inside: page) {
-                kept.append(stroke)
+            if let index = pageIndex(of: stroke, layout: layout), lies(stroke, inside: layout.frame(ofPageAt: index)) {
+                split.append(stroke)
             } else {
                 isChanged = true
-                stroke.clipped(to: page).map { kept.append($0) }
+                split += layout.pageIndices(intersecting: stroke.bounds).compactMap { stroke.clipped(to: layout.frame(ofPageAt: $0)) }
             }
         }
-        return isChanged ? kept : nil
+        return isChanged ? split : nil
     }
 
     /// Whether a stroke stays inside `rect`, give or take the rounding of moving it between pages and the stack.

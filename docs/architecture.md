@@ -57,10 +57,12 @@ ends at ten, which is as far as PencilKit magnifies a canvas.
 - **Pages of strokes.** A stroke belongs to the page it starts on, or to the nearest page when it
   starts between two. Moving ink between page points and document points only changes a stroke's
   transform, so strokes keep their identity and their eraser masks.
-- **Ink ends at the page.** A stroke that is drawn, moved or pasted beyond the edge of its page is
-  cut there once the tool has lifted: the stroke gets a mask in the shape of its page, and a stroke
-  that draws nothing on its page is dropped. Every stroke therefore lies inside one page, which is
-  what a page stores, exports and shows in its thumbnail.
+- **Ink ends at the page.** A stroke that is drawn, moved or pasted across the edge of its page is
+  split there once the tool has lifted: it becomes one stroke on each page it draws on, each with a
+  mask in the shape of its page, and what it draws beside the pages is dropped. The parts of a
+  stroke are one undo step. Every stroke therefore lies inside one page, which is what a page
+  stores, exports and shows in its thumbnail. A stroke with a mask counts as starting where its
+  path first enters the mask, so each part belongs to the page it lies on.
 - **Backgrounds.** `PageBackgroundView` shows bitmaps rendered off the main thread, beneath the ink.
   A base image covers the whole page at screen resolution up to a pixel budget. Beyond that budget,
   a detail image at screen resolution covers the visible part of the page. An image stays on screen
@@ -81,8 +83,8 @@ These properties of PencilKit shape the canvas:
 - Reading the ink of a canvas takes time with every stroke it holds, however little of it changed.
   The canvas reads its ink once the writing pauses, not after every stroke, and keeps the number of
   pages whose ink it holds small.
-- A canvas draws a stroke it already shows again only when the stroke's identity changes. A stroke
-  that is cut is therefore a new stroke.
+- A canvas draws a stroke it already shows again only when the stroke's identity changes. The parts
+  of a split stroke are therefore new strokes.
 - PencilKit drops a lasso selection whenever its view is resized, so the canvas keeps its size when
   a keyboard appears.
 - PencilKit takes the focus while strokes are selected and accepts typed text there, which would
