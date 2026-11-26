@@ -8,6 +8,7 @@ struct FloatingToolBar: View {
     @Bindable var model: ToolBarModel
 
     @Environment(\.layoutDirection) private var layoutDirection
+    @Environment(\.colorScheme) private var colorScheme
     @State private var dragOffset = CGSize.zero
 
     private static let margin: CGFloat = 12
@@ -46,7 +47,7 @@ struct FloatingToolBar: View {
         }
         .padding(8)
         .fixedSize()
-        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: Self.cornerRadius))
+        .glassEffect(.regular.tint(glassTint).interactive(), in: .rect(cornerRadius: Self.cornerRadius))
         // Glass alone has no edge on white paper.
         .overlay {
             RoundedRectangle(cornerRadius: Self.cornerRadius)
@@ -56,6 +57,12 @@ struct FloatingToolBar: View {
         .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
         .animation(.spring(response: 0.3, dampingFraction: 0.86), value: showsOptions)
         .animation(.spring(response: 0.3, dampingFraction: 0.86), value: model.settings.tool)
+    }
+
+    /// The bar floats over paper, which stays light. Dark glass on its own turns grey there, so in
+    /// dark mode it is darkened until light icons stand out on it.
+    private var glassTint: Color? {
+        colorScheme == .dark ? Color.black.opacity(0.6) : nil
     }
 
     private var options: some View {

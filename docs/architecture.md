@@ -106,8 +106,9 @@ app, not of a notebook.
 
 `FloatingToolBar` replaces the system tool picker. It floats above the canvas, unfolds the options
 of the selected tool in place and can be dragged to any edge of the screen; `DockEdge` picks the edge
-nearest to where the bar is let go. A double tap on Apple Pencil does what the user chose in the
-system settings.
+nearest to where the bar is let go. The bar mostly floats over paper, which stays light, so in dark
+mode its glass is darkened until its light icons and the colours of dark ink stand out. A double
+tap on Apple Pencil does what the user chose in the system settings.
 
 ## Undo
 

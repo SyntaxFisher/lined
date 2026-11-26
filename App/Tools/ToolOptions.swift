@@ -27,11 +27,8 @@ struct ToolOptions: View {
                 Toggle(isOn: $settings.returnsAfterErasing) {
                     Label("Switch Back", systemImage: "arrow.uturn.backward")
                         .labelStyle(isColumn ? AnyLabelStyle(.iconOnly) : AnyLabelStyle(.titleAndIcon))
-                        .font(.subheadline.weight(.medium))
-                        .frame(minWidth: 28, minHeight: 28)
                 }
-                .toggleStyle(.button)
-                .buttonBorderShape(.capsule)
+                .toggleStyle(ToolBarToggleStyle())
                 .accessibilityLabel("Switch back after erasing")
             case .lasso:
                 EmptyView()
@@ -79,8 +76,7 @@ private struct ColorChoices: View {
         Button {
             selection = color
         } label: {
-            Circle()
-                .fill(Color(color))
+            InkDot(color: Color(color))
                 .frame(width: 24, height: 24)
                 .padding(4)
                 .overlay {
@@ -109,8 +105,7 @@ private struct WidthChoices: View {
                 Button {
                     selection = width
                 } label: {
-                    Circle()
-                        .fill(color)
+                    InkDot(color: color)
                         .frame(width: width.dotDiameter, height: width.dotDiameter)
                         .frame(width: 32, height: 32)
                         .overlay {
@@ -125,6 +120,17 @@ private struct WidthChoices: View {
                 .accessibilityAddTraits(width == selection ? .isSelected : [])
             }
         }
+    }
+}
+
+/// A dot of ink colour, edged so that dark ink stays visible on the dark bar and light ink on the light one.
+private struct InkDot: View {
+    let color: Color
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .strokeBorder(.primary.opacity(0.25), lineWidth: 1)
     }
 }
 
@@ -202,6 +208,25 @@ private extension InkColor {
         case .peach: "Peach"
         case .lilac: "Lilac"
         }
+    }
+}
+
+/// A toggle of the tool bar, filled like a selected tool while it is on.
+private struct ToolBarToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Button {
+            configuration.isOn.toggle()
+        } label: {
+            configuration.label
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(configuration.isOn ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+                .padding(.horizontal, 10)
+                .frame(minWidth: 36, minHeight: 36)
+                .background(configuration.isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear), in: .capsule)
+                .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(configuration.isOn ? .isSelected : [])
     }
 }
 
