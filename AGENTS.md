@@ -14,7 +14,7 @@
 ## Architecture
 
 - Read `docs/architecture.md` before changing the structure and `docs/storage.md` before changing anything that is saved.
-- `Packages/LinedKit` holds the model, storage, rendering and canvas geometry without UIKit, SwiftUI or PencilKit. Logic that fits there goes there, with tests.
+- `Packages/LinedKit` holds the model, storage, rendering, canvas geometry and ink bookkeeping without UIKit, SwiftUI or PencilKit. Logic that fits there goes there, with tests.
 - The app target is SwiftUI. UIKit and PencilKit stay in `App/Canvas` and the notebook types that hold drawings.
 - `LibraryModel` is the only place that changes the library, `NotebookSession` the only place that changes an open notebook.
 - Page content is stored per page and keyed by page identifier, in page points with the origin at the top left. New kinds of content become new files in the notebook package.

@@ -34,7 +34,7 @@ DEVELOPMENT_TEAM = ABCDE12345
 
 ```
 App/                 the app target: SwiftUI interface and the UIKit canvas
-Packages/LinedKit/   model, storage, rendering and layout, with tests
+Packages/LinedKit/   model, storage, rendering, layout and ink bookkeeping, with tests
 Config/              build settings
 scripts/             release tooling, with tests
 docs/                developer documentation
@@ -47,7 +47,8 @@ the format on disk and [testflight.md](testflight.md) how test builds reach an i
 ## Tests
 
 The package tests run on the Mac with Swift Testing and cover the model's invariants, the storage
-round trips and recovery paths, the rendering of paper and PDF pages, and the canvas geometry.
+round trips and recovery paths, the rendering of paper and PDF pages, the canvas geometry, and the
+bookkeeping of ink and undo steps.
 Logic belongs in the package so that it can be tested this way; the app target holds interface and
 wiring.
 

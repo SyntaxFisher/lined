@@ -7,10 +7,11 @@ UIKit lives in a local Swift package, `Packages/LinedKit`, and is tested on the 
 
 | Module | Purpose | May import |
 | --- | --- | --- |
-| `LinedModel` | The library tree, notebooks, pages and their invariants. Pure values. | Foundation |
+| `LinedModel` | The library tree, notebooks, pages, the drawing tools and their invariants. Pure values. | Foundation |
 | `LinedStorage` | Reads and writes the library and notebook packages on disk. | `LinedModel` |
 | `LinedRendering` | Draws page backgrounds, paper and PDF, into bitmaps. | `LinedModel`, CoreGraphics |
-| `LinedLayout` | Geometry of the canvas: page stack, ink window, render planning. | CoreGraphics |
+| `LinedLayout` | Geometry of the canvas: page stack, render planning, tool bar docking. | CoreGraphics |
+| `LinedInk` | Which page a stroke belongs to, which pages changed, and the undo history. | `LinedLayout` |
 | App target | Interface, PencilKit, and the wiring between the modules. | all of the above |
 
 Dependencies point from the app to the package and never back. The package targets compile for
@@ -21,6 +22,7 @@ The app target is split by feature:
 - `App/Library` shows folders and notebooks. `LibraryModel` is the only place that changes the library.
 - `App/Notebook` opens one notebook. `NotebookSession` owns its pages, ink, undo history and saving.
 - `App/Canvas` is the UIKit bridge that scrolls, zooms and draws the pages.
+- `App/Tools` is the floating tool bar with the options of each tool.
 - `App/Covers` renders and caches the cover pictures of the library.
 
 ## Document model
@@ -37,42 +39,76 @@ mixed up.
 
 ## Canvas
 
-`PagedCanvasView` shows the pages as one vertical stack inside a single `UIScrollView`, which owns
-scrolling and zooming. The content is laid out in page points and the scroll view's zoom scale is
-the number of screen points per page point.
+`PagedCanvasView` shows the pages as one vertical stack. A single `PKCanvasView` is the scroll view
+of the whole notebook, so scrolling, zooming and ink rendering are PencilKit's own and behave like
+they do in every other app. The canvas draws in document points: page points, offset by the place of
+the page in the stack. Its zoom scale is the number of screen points per document point.
 
-- **Virtualized pages.** Only the pages near the viewport have a view. Views are reused, so memory
-  and work do not grow with the length of the document.
-- **Ink.** Each page view holds a `PKCanvasView` that covers only the visible part of the page. It
-  is sized like the viewport, counter-scaled against the scroll view and given the same zoom itself,
-  so PencilKit renders strokes at screen resolution at every zoom level with bounded memory. While
-  a pinch is in progress the canvas keeps its resolution and is brought to full sharpness when the
-  pinch ends.
-- **Backgrounds.** `PageBackgroundView` shows bitmaps rendered off the main thread. A base image
-  covers the whole page at screen resolution up to a pixel budget. Beyond that budget, a detail image
-  at screen resolution covers the visible part of the page. An image stays on screen until its
-  replacement is ready, and images are aligned to the pixel grid, so text is neither blank nor
-  blurred while zooming. `BackgroundRenderPlanner` decides what to render; it is plain geometry and
-  unit-tested.
+- **Virtualized pages.** Only the pages near the viewport have a background view. Views are reused,
+  so memory and work do not grow with the length of the document.
+- **Virtualized ink.** The canvas holds only the strokes of the pages near the viewport. A page's
+  stored ink is asked for before the page scrolls into view and given up when the page is far away,
+  with a gap between the two distances so that a page does not load and unload while the view moves
+  back and forth. The ink in the canvas is never replaced while a tool is in use or a pinch is in
+  progress; what arrives meanwhile waits and is then placed beneath the strokes drawn meanwhile.
+- **Pages of strokes.** A stroke belongs to the page it starts on, or to the nearest page when it
+  starts between two. Moving ink between page points and document points only changes a stroke's
+  transform, so strokes keep their identity and their eraser masks.
+- **Backgrounds.** `PageBackgroundView` shows bitmaps rendered off the main thread, beneath the ink.
+  A base image covers the whole page at screen resolution up to a pixel budget. Beyond that budget,
+  a detail image at screen resolution covers the visible part of the page. An image stays on screen
+  until its replacement is ready, and images are aligned to the pixel grid, so text is neither blank
+  nor blurred while zooming. `BackgroundRenderPlanner` decides what to render; it is plain geometry
+  and unit-tested.
+- **Desk.** `DeskMaskView` lies above the ink and covers everything that is not a page, so strokes
+  end at the edge of the paper.
 - **PDF.** Pages are drawn with CoreGraphics from the stored PDF file. Nothing is pre-rasterized, so
   import is fast and the page stays vector-sharp at any zoom.
 
-Input follows the tool picker's convention: Apple Pencil draws and fingers scroll. With finger
-drawing switched on, one finger draws and two fingers scroll and zoom.
+Apple Pencil draws and fingers scroll and zoom. With finger drawing switched on, one finger draws
+and two fingers scroll and zoom.
+
+Three properties of PencilKit shape the canvas:
+
+- PencilKit drops a lasso selection whenever its view is resized, so the canvas keeps its size when
+  a keyboard appears.
+- PencilKit takes the focus while strokes are selected and accepts typed text there, which would
+  bring up the keyboard. The canvas takes the focus back; the selection and its menu stay.
+- PencilKit selects strokes and opens its edit menu on a tap or a long press with any tool. These
+  gestures are switched on only for the lasso, so a resting hand does nothing with the other tools.
+
+## Tools
+
+`ToolSettings` in the model holds the selected tool and what each tool remembers: colour, width and
+style of the pen and the highlighter, and the mode of the eraser. The app maps it to PencilKit tools
+in one place. The settings and the edge the tool bar is docked to are saved as preferences of the
+app, not of a notebook.
+
+`FloatingToolBar` replaces the system tool picker. It floats above the canvas, unfolds the options
+of the selected tool in place and can be dragged to any edge of the screen; `DockEdge` picks the edge
+nearest to where the bar is let go. A double tap on Apple Pencil does what the user chose in the
+system settings.
 
 ## Undo
 
-A notebook session has one `UndoManager`. The canvases record PencilKit's own undo steps in it
-through the responder chain, so the toolbar buttons, the tool picker, system gestures and the
-keyboard all act on the same history across pages. Undo steps belong to a canvas, so the pages
-edited last keep their views while out of sight, and a page that gives up its view gives up its
-undo steps.
+A notebook keeps its own undo history, `InkHistory`, because the ink of a page leaves the canvas
+when the page is far away and an undo step must still reach it. The canvas compares its strokes with
+what it reported last and tells the session which pages changed; each report is one step with the
+ink of those pages before and after. An eraser or a lasso changes the ink many times while it moves
+and is reported once when it lifts, so it is one step.
+
+Undoing puts the earlier ink back into the store and, where the page is loaded, into the canvas.
+The steps of a deleted page are forgotten with it.
+
+`NotebookUndoManager` is the undo manager the canvas and PencilKit find through the responder chain.
+It records nothing and passes undoing on to the session, so the toolbar buttons, the system's
+gestures and the keyboard all act on the same history.
 
 ## Saving
 
-Ink is saved per page a moment after the last change, and immediately when the app leaves the
-foreground or the notebook is closed. Structural changes, such as adding or deleting a page, are
-written at once. The storage format is described in [storage.md](storage.md).
+Ink is saved per page at most a second after a change, also while writing continues, and immediately
+when the app leaves the foreground or the notebook is closed. Structural changes, such as adding or
+deleting a page, are written at once. The storage format is described in [storage.md](storage.md).
 
 ## Concurrency
 
@@ -85,6 +121,7 @@ and `Sendable`.
 
 - Keep UIKit and PencilKit inside `App/Canvas` and the few notebook types that hold drawings.
   Interface code elsewhere is SwiftUI.
-- New logic that can be expressed without UIKit goes into the package, with tests.
+- New logic that can be expressed without UIKit goes into the package, with tests. PencilKit does
+  not run in the package's tests; code that handles strokes there is generic over `InkStroke`.
 - The model never knows about files, and storage never knows about views.
 - Persisted formats change only by the rules in [storage.md](storage.md).
