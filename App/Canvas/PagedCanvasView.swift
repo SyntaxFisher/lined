@@ -151,6 +151,7 @@ final class PagedCanvasView: UIView {
         canvas.insertSubview(pagesView, at: 0)
         canvas.addSubview(desk)
         canvas.addInteraction(UIPencilInteraction(delegate: self))
+        canvas.addGestureRecognizer(undoTap)
 
         updateDeskColor()
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, _) in self.updateDeskColor() }
@@ -641,6 +642,19 @@ final class PagedCanvasView: UIView {
         for recognizer in canvas.selectionGestureRecognizers {
             recognizer.isEnabled = isSelecting
         }
+    }
+
+    /// A double tap with two fingers undoes the last step.
+    private lazy var undoTap: UITapGestureRecognizer = {
+        let tap = UITapGestureRecognizer(target: self, action: #selector(undoLastStep))
+        tap.numberOfTouchesRequired = 2
+        tap.numberOfTapsRequired = 2
+        tap.allowedTouchTypes = [UITouch.TouchType.direct.rawValue as NSNumber]
+        return tap
+    }()
+
+    @objc private func undoLastStep() {
+        undoManager?.undo()
     }
 
     override var canBecomeFirstResponder: Bool { true }

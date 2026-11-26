@@ -129,7 +129,7 @@ The steps of a deleted page are forgotten with it.
 
 `NotebookUndoManager` is the undo manager the canvas and PencilKit find through the responder chain.
 It records nothing and passes undoing on to the session, so the toolbar buttons, the system's
-gestures and the keyboard all act on the same history.
+gestures, the canvas's own double tap with two fingers and the keyboard all act on the same history.
 
 ## Saving
 
