@@ -560,30 +560,29 @@ final class PagedCanvasView: UIView {
         return Array(strokes[reportedInk.count...])
     }
 
-    /// Splits what was drawn across the edge of a page into one stroke on each page and tells the
-    /// notebook which pages' ink differs from what it was told last.
+    /// Cuts what was drawn past the edge of its page off at that edge and tells the notebook which
+    /// pages' ink differs from what it was told last.
     ///
-    /// After plain drawing, that takes a look at the new strokes only, and each of them, with all
-    /// its parts, is a step of its own to undo. After anything else, all the ink of the canvas is
-    /// compared with the record.
+    /// After plain drawing, that takes a look at the new strokes only, and each of them is a step of
+    /// its own to undo. After anything else, all the ink of the canvas is compared with the record.
     private func reportInkChanges() {
         hasUnreportedInk = false
         var strokes = canvas.drawing.strokes
         if let drawn = strokesDrawn(onTopOfReportedInkIn: strokes) {
             guard !drawn.isEmpty else { return }
-            let steps = drawn.map { DocumentInk.strokesSplitAtPages([$0], layout: layout) ?? [$0] }
-            let parts = steps.flatMap { $0 }
-            if parts.map(\.id) != drawn.map(\.id) {
-                strokes.replaceSubrange((strokes.count - drawn.count)..., with: parts)
+            let steps = drawn.map { DocumentInk.strokesClippedToTheirPages([$0], layout: layout) ?? [$0] }
+            let kept = steps.flatMap { $0 }
+            if kept.map(\.id) != drawn.map(\.id) {
+                strokes.replaceSubrange((strokes.count - drawn.count)..., with: kept)
                 replaceInk(with: strokes)
             }
             for step in steps where !step.isEmpty {
                 tellNotebook(inkRecord.add(step, layout: layout, pageIDs: pageIDs))
             }
         } else {
-            if let split = DocumentInk.strokesSplitAtPages(strokes, layout: layout) {
-                strokes = split
-                replaceInk(with: split)
+            if let clipped = DocumentInk.strokesClippedToTheirPages(strokes, layout: layout) {
+                strokes = clipped
+                replaceInk(with: clipped)
             }
             tellNotebook(inkRecord.compare(with: strokes, layout: layout, pageIDs: pageIDs))
         }
