@@ -32,8 +32,9 @@ simulator:
 build: project simulator ## Build the app for the simulator
 	$(XCODEBUILD) build
 
-test: ## Run the LinedKit unit tests on this Mac
+test: ## Run the unit tests of LinedKit and the scripts on this Mac
 	swift test --package-path Packages/LinedKit
+	python3 -m unittest discover --start-directory scripts/tests --quiet
 
 run: build ## Build, install and launch the app in the simulator
 	xcrun simctl boot $(SIMULATOR_ID) 2>/dev/null || true
