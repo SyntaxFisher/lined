@@ -46,7 +46,9 @@ the page in the stack. Its zoom scale is the number of screen points per documen
 ends at ten, which is as far as PencilKit magnifies a canvas.
 
 - **Virtualized pages.** Only the pages near the viewport have a background view. Views are reused,
-  so memory and work do not grow with the length of the document.
+  so memory and work do not grow with the length of the document. A view appears half a viewport
+  before its page comes into sight and goes only one and a half viewports after it has left, and
+  never while a zoom springs back, so pages next to the viewport stay in place while zooming.
 - **Virtualized ink.** The canvas holds only the strokes of the pages near the viewport. A page's
   stored ink is asked for before the page scrolls into view and given up when the page is far away,
   with a gap between the two distances so that a page does not load and unload while the view moves
@@ -72,6 +74,9 @@ ends at ten, which is as far as PencilKit magnifies a canvas.
 - **Desk.** `DeskView` lies above the ink and covers everything around the pages near the viewport
   with plain rectangles, so a stroke that is being drawn ends at the edge of the paper. `Desk` works
   the rectangles out; it is plain geometry and unit-tested.
+- **Zoom.** The page backgrounds and the desk are scaled with the canvas's zoom. When a pinch goes
+  past the zoom limits, the canvas springs back with an animation of the view that holds the ink;
+  the backgrounds and the desk take that animation over, so paper and ink move together.
 - **PDF.** Pages are drawn with CoreGraphics from the stored PDF file. Nothing is pre-rasterized, so
   import is fast and the page stays vector-sharp at any zoom.
 

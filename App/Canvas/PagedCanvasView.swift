@@ -248,12 +248,30 @@ final class PagedCanvasView: UIView {
     }
 
     /// The canvas magnifies its ink itself; the views that share its document coordinates follow here.
+    ///
+    /// A zoom that went beyond its limit springs back once the fingers lift. The canvas then takes
+    /// its final zoom at once and animates the view it magnifies there. Where UIKit does that inside
+    /// an animation block, the pages and the desk are animated along with it; where it does not, they
+    /// are given its animation. Otherwise they would show at the final zoom while the ink is still
+    /// on its way.
     private func applyZoomToPages() {
         let scale = CGAffineTransform(scaleX: canvas.zoomScale, y: canvas.zoomScale)
+        let springBack = zoomAnimation
         for view in [pagesView, desk] {
             view.layer.position = .zero
             view.transform = scale
+            if let springBack, view.layer.animation(forKey: "transform") == nil {
+                view.layer.add(springBack, forKey: "transform")
+            }
         }
+    }
+
+    /// The animation with which the canvas brings the content it magnifies to its zoom, while it runs.
+    private var zoomAnimation: CAAnimation? {
+        canvas.subviews.lazy
+            .filter { $0 !== self.pagesView && $0 !== self.desk }
+            .compactMap { $0.layer.animation(forKey: "transform") }
+            .first
     }
 
     /// Centres content that is smaller than the viewport and keeps the last page clear of
@@ -285,8 +303,7 @@ final class PagedCanvasView: UIView {
     private func refresh() {
         guard viewportSize != .zero, !isApplyingLayout else { return }
         let visible = visibleRect
-        let reach = reach(around: visible)
-        updateDisplayedPages(within: reach)
+        updateDisplayedPages(around: visible)
 
         // During a pinch the backgrounds keep their resolution; only pages that show nothing yet are rendered.
         let pixelsPerPoint = pixelsPerPoint
@@ -304,18 +321,25 @@ final class PagedCanvasView: UIView {
 
     // MARK: Page views
 
-    /// The viewport extended by half its height in both directions: the pages to keep ready.
-    private func reach(around visible: CGRect) -> CGRect {
-        visible.insetBy(dx: 0, dy: -visible.height / 2)
+    /// Pages this close to the viewport get a view; pages farther away give it up. Both in viewport
+    /// heights. The distance between the two keeps a page from coming and going while the view moves
+    /// back and forth, and a page's background from being rendered again.
+    private enum PageReach {
+        static let show: CGFloat = 0.5
+        static let keep: CGFloat = 1.5
     }
 
-    private func updateDisplayedPages(within reach: CGRect) {
-        let nearby = layout.pageIndices(intersecting: reach)
-        let wanted = Set(nearby.map { pages[$0].id })
-        for pageID in pageViews.keys.filter({ !wanted.contains($0) }) {
-            endDisplaying(pageID)
+    private func updateDisplayedPages(around visible: CGRect) {
+        // While a zoom springs back, the canvas already reports where it will end; until then, more
+        // of the notebook is in view.
+        if zoomAnimation == nil {
+            let kept = Set(layout.pageIndices(intersecting: visible.insetBy(dx: 0, dy: -visible.height * PageReach.keep)).map { pages[$0].id })
+            for pageID in pageViews.keys where !kept.contains(pageID) {
+                endDisplaying(pageID)
+            }
         }
-        for index in nearby where pageViews[pages[index].id] == nil {
+        for index in layout.pageIndices(intersecting: visible.insetBy(dx: 0, dy: -visible.height * PageReach.show))
+        where pageViews[pages[index].id] == nil {
             display(pageAt: index)
         }
     }
