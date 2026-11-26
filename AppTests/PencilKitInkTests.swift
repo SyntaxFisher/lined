@@ -1,5 +1,6 @@
 import LinedInk
 import LinedLayout
+import LinedModel
 import PencilKit
 import Testing
 @testable import Lined
@@ -60,6 +61,23 @@ struct PencilKitInkTests {
             for far in [CGPoint(x: page.midX, y: page.midY), CGPoint(x: page.maxX - 20, y: page.minY + 20), CGPoint(x: page.maxX - 20, y: page.maxY - 20)] {
                 #expect(!mask.contains(far.applying(toPath)), "page \(index), \(far)")
             }
+        }
+    }
+
+    /// A width outside PencilKit's range would be drawn like its neighbour.
+    @Test func everyWidthIsOneThatPencilKitDraws() throws {
+        var settings = ToolSettings()
+        for style in ToolSettings.PenStyle.allCases {
+            settings.penStyle = style
+            for width in StrokeWidth.allCases {
+                settings.penWidth = width
+                let ink: PKInkingTool.InkType = style == .pen ? .pen : .monoline
+                #expect(ink.validWidthRange.contains(CGFloat(settings.penLineWidth)), "\(style) \(width)")
+            }
+        }
+        for width in StrokeWidth.allCases {
+            settings.highlighterWidth = width
+            #expect(PKInkingTool.InkType.marker.validWidthRange.contains(CGFloat(settings.highlighterLineWidth)), "\(width)")
         }
     }
 
