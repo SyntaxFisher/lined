@@ -1,3 +1,4 @@
+import LinedInk
 import LinedModel
 import LinedRendering
 import LinedStorage
@@ -7,7 +8,7 @@ import UIKit
 
 /// An open notebook: its pages, their ink, and the undo history across them.
 @Observable
-final class NotebookSession {
+final class NotebookSession: NotebookHistory {
     let notebookID: Notebook.ID
     private(set) var document: NotebookDocument
     private(set) var currentPageIndex: Int
@@ -17,9 +18,8 @@ final class NotebookSession {
     private(set) var inkRevisions: [Page.ID: Int] = [:]
     var failureMessage: String?
 
-    /// One history for the whole notebook. The canvases record their steps in it, and the tool picker,
-    /// the undo gestures and the keyboard act on it, all by way of the responder chain.
-    @ObservationIgnored let undoManager = UndoManager()
+    /// Passes the system's undo gestures and keyboard shortcuts on to the notebook's history.
+    @ObservationIgnored let undoManager = NotebookUndoManager()
 
     @ObservationIgnored private let files: NotebookFiles
     @ObservationIgnored private let ink: PageInkStore
@@ -27,7 +27,7 @@ final class NotebookSession {
     @ObservationIgnored private let onContentChange: () -> Void
     @ObservationIgnored private let thumbnails = NSCache<NSString, CGImage>()
     @ObservationIgnored private weak var canvas: (any PagedCanvasControlling)?
-    @ObservationIgnored private var undoObservers: [any NSObjectProtocol] = []
+    @ObservationIgnored private var history = InkHistory<Page.ID, PKStroke>()
     @ObservationIgnored private var savedViewState: NotebookViewState
 
     var pages: [Page] { document.pages }
@@ -72,14 +72,11 @@ final class NotebookSession {
         ink.onSaveFailure = { [weak self] error in
             self?.failureMessage = ErrorMessage.text(for: error)
         }
-        observeUndoManager()
-    }
-
-    isolated deinit {
-        undoObservers.forEach(NotificationCenter.default.removeObserver)
+        undoManager.history = self
     }
 
     /// Connects the canvas that shows this notebook and opens it where the reader left off.
+    /// The pages appear at once; the canvas asks for their ink as they come near.
     func attach(_ canvas: any PagedCanvasControlling) {
         self.canvas = canvas
         canvas.setPages(pages)
@@ -113,15 +110,18 @@ final class NotebookSession {
     func deletePage(_ pageID: Page.ID) async {
         var updated = document
         guard (try? updated.removePage(pageID)) != nil else { return }
-        ink.discard(pageID)
         await apply(updated)
         try? await files.removeUnreferencedResources(keeping: updated)
     }
 
     private func apply(_ updated: NotebookDocument) async {
+        let removed = Set(pages.map(\.id)).subtracting(updated.pages.map(\.id))
         document = updated
         currentPageIndex = min(currentPageIndex, updated.pages.count - 1)
         canvas?.setPages(updated.pages)
+        removed.forEach(ink.discard)
+        history.forget(removed)
+        refreshUndoAvailability()
         do {
             try await files.writeDocument(updated)
             onContentChange()
@@ -130,20 +130,44 @@ final class NotebookSession {
         }
     }
 
+    // MARK: Ink
+
+    private func take(_ changes: [PageInkChange]) {
+        for change in changes {
+            ink.setDrawing(PKDrawing(strokes: change.after), for: change.pageID)
+            inkRevisions[change.pageID, default: 0] += 1
+        }
+    }
+
+    /// Puts ink back as a step of the history says, in the store and on the canvas.
+    private func restore(_ changes: [PageInkChange]) {
+        take(changes)
+        for change in changes {
+            canvas?.setInk(change.after, for: change.pageID)
+        }
+        if let pageID = changes.first?.pageID {
+            canvas?.reveal(pageID)
+        }
+        refreshUndoAvailability()
+    }
+
     // MARK: Undo
 
-    private func observeUndoManager() {
-        let changes: [Notification.Name] = [.NSUndoManagerDidCloseUndoGroup, .NSUndoManagerDidUndoChange, .NSUndoManagerDidRedoChange]
-        undoObservers = changes.map { name in
-            NotificationCenter.default.addObserver(forName: name, object: undoManager, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.refreshUndoAvailability() }
-            }
+    func undo() {
+        if let changes = history.undo() {
+            restore(changes)
+        }
+    }
+
+    func redo() {
+        if let changes = history.redo() {
+            restore(changes)
         }
     }
 
     private func refreshUndoAvailability() {
-        canUndo = undoManager.canUndo
-        canRedo = undoManager.canRedo
+        if canUndo != history.canUndo { canUndo = history.canUndo }
+        if canRedo != history.canRedo { canRedo = history.canRedo }
     }
 
     // MARK: Thumbnails
@@ -169,28 +193,23 @@ extension NotebookSession: PagedCanvasDelegate {
         page.backgroundRenderer { pdfSources[$0] }
     }
 
-    func drawing(for pageID: Page.ID) async -> PKDrawing {
-        await ink.beginDisplaying(pageID)
+    func ink(for pageID: Page.ID) async -> [PKStroke] {
+        await ink.beginDisplaying(pageID).strokes
     }
 
-    func canvasDidChangeDrawing(_ drawing: PKDrawing, on pageID: Page.ID) {
-        ink.setDrawing(drawing, for: pageID)
-        inkRevisions[pageID, default: 0] += 1
-        // An undone or redone stroke may lie on a page that is out of sight.
-        if undoManager.isUndoing || undoManager.isRedoing {
-            canvas?.reveal(pageID)
-        }
-    }
-
-    func canvasDidEndDisplayingPage(_ pageID: Page.ID) {
+    func canvasDidEndDisplayingInk(of pageID: Page.ID) {
         ink.endDisplaying(pageID)
+    }
+
+    func canvasDidChangeInk(_ changes: [PageInkChange]) {
+        // A page can be removed while the canvas still reports what was last drawn on it.
+        let changes = changes.filter { document.index(of: $0.pageID) != nil }
+        take(changes)
+        history.record(changes)
+        refreshUndoAvailability()
     }
 
     func canvasDidShowPage(at index: Int) {
         currentPageIndex = index
-    }
-
-    func canvasDidChangeUndoHistory() {
-        refreshUndoAvailability()
     }
 }

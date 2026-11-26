@@ -1,10 +1,14 @@
+import LinedModel
 import SwiftUI
 
 /// The pages of an open notebook: scrolling, zooming and handwriting.
 struct NotebookCanvas: UIViewRepresentable {
     let session: NotebookSession
+    let tools: ToolSettings
     let allowsFingerDrawing: Bool
-    let isToolPickerVisible: Bool
+    var onToolBegin: () -> Void = {}
+    var onEraseEnd: () -> Void = {}
+    var onPencilShortcut: (PencilShortcut) -> Void = { _ in }
 
     func makeUIView(context: Context) -> PagedCanvasView {
         let view = PagedCanvasView()
@@ -15,6 +19,9 @@ struct NotebookCanvas: UIViewRepresentable {
 
     func updateUIView(_ view: PagedCanvasView, context: Context) {
         view.allowsFingerDrawing = allowsFingerDrawing
-        view.isToolPickerVisible = isToolPickerVisible
+        view.tools = tools
+        view.onToolBegin = onToolBegin
+        view.onEraseEnd = onEraseEnd
+        view.onPencilShortcut = onPencilShortcut
     }
 }

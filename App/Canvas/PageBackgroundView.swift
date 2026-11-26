@@ -4,6 +4,7 @@ import UIKit
 
 /// Shows the paper or PDF page beneath the ink, re-rendered for the zoom it is viewed at.
 ///
+/// The view's bounds are the page in page points; the canvas around it magnifies it.
 /// A base image covers the whole page. Where the zoom exceeds what the base image may hold,
 /// a detail image at screen resolution covers the visible part. An image stays on screen until
 /// its replacement has finished rendering, so the page never flashes empty.
@@ -21,6 +22,9 @@ final class PageBackgroundView: UIView {
         super.init(frame: .zero)
         isUserInteractionEnabled = false
         backgroundColor = .white
+        clipsToBounds = true
+        layer.borderColor = UIColor(white: 0, alpha: 0.14).cgColor
+        layer.borderWidth = 0.5
         layer.addSublayer(base.layer)
         layer.addSublayer(detail.layer)
     }
@@ -34,12 +38,16 @@ final class PageBackgroundView: UIView {
         reset()
         self.pageSize = pageSize
         self.renderer = renderer
+        bounds = CGRect(origin: .zero, size: pageSize)
     }
 
     func reset() {
         releaseImages()
         renderer = nil
     }
+
+    /// Whether the page shows no rendered image and none is on its way.
+    var isBlank: Bool { base.shown == nil && base.task == nil }
 
     /// Drops the rendered images until the next `update`.
     func releaseImages() {

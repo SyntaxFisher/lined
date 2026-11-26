@@ -24,6 +24,8 @@ targets:
         product: LinedRendering
       - package: LinedKit
         product: LinedLayout
+      - package: LinedKit
+        product: LinedInk
 schemes:
   Lined:
     build:

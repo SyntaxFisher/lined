@@ -1,8 +1,8 @@
 import LinedModel
 import PencilKit
 
-/// The ink of an open notebook's pages: loaded on demand, held in memory while a page is on screen
-/// or has unsaved changes, and written back shortly after it changes.
+/// The ink of an open notebook's pages: loaded on demand, held in memory while a canvas shows a page
+/// or the page has unsaved changes, and written back shortly after it changes.
 final class PageInkStore {
     var onSave: (() -> Void)?
     var onSaveFailure: ((any Error) -> Void)?
@@ -39,12 +39,14 @@ final class PageInkStore {
         return stored
     }
 
+    /// Takes the page's changed ink. While writing goes on, the ink reaches the disk about once
+    /// a second, not after every stroke and not only when the writing pauses.
     func setDrawing(_ drawing: PKDrawing, for pageID: Page.ID) {
         drawings[pageID] = drawing
         unsavedPages.insert(pageID)
-        scheduledSave?.cancel()
+        guard scheduledSave == nil else { return }
         scheduledSave = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(800))
+            try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled else { return }
             await self?.save()
         }
@@ -59,6 +61,7 @@ final class PageInkStore {
 
     /// Writes all unsaved ink. Ink that fails to save stays in memory and goes out with the next save.
     func save() async {
+        scheduledSave = nil
         let pending = unsavedPages
         guard !pending.isEmpty else { return }
         unsavedPages.removeAll()

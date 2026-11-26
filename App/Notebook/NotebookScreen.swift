@@ -44,21 +44,25 @@ private struct NotebookEditor: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(Preference.allowsFingerDrawing) private var allowsFingerDrawing = Preference.allowsFingerDrawingByDefault
     @State private var isShowingPages = false
+    @State private var toolBar = ToolBarModel()
 
     var body: some View {
-        NotebookCanvas(session: session, allowsFingerDrawing: allowsFingerDrawing, isToolPickerVisible: !isShowingPages)
-            .ignoresSafeArea(.container, edges: [.horizontal, .bottom])
-            .ignoresSafeArea(.keyboard)
+        canvas
+            .overlay {
+                FloatingToolBar(model: toolBar)
+            }
             .navigationTitle(title)
             .toolbarTitleMenu {
                 RenameButton()
             }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button("Undo", systemImage: "arrow.uturn.backward", action: session.undoManager.undo)
+                    Button("Undo", systemImage: "arrow.uturn.backward", action: session.undo)
                         .disabled(!session.canUndo)
-                    Button("Redo", systemImage: "arrow.uturn.forward", action: session.undoManager.redo)
+                        .keyboardShortcut("z", modifiers: .command)
+                    Button("Redo", systemImage: "arrow.uturn.forward", action: session.redo)
                         .disabled(!session.canRedo)
+                        .keyboardShortcut("z", modifiers: [.command, .shift])
                 }
                 ToolbarSpacer(.fixed, placement: .topBarTrailing)
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -90,6 +94,25 @@ private struct NotebookEditor: View {
             .onDisappear {
                 Task { await session.save() }
             }
+    }
+
+    private var canvas: some View {
+        NotebookCanvas(
+            session: session,
+            tools: toolBar.settings,
+            allowsFingerDrawing: allowsFingerDrawing,
+            onToolBegin: {
+                // Writing takes the options out of the way.
+                if toolBar.isShowingOptions {
+                    toolBar.isShowingOptions = false
+                }
+            },
+            onEraseEnd: { toolBar.settings.finishErasing() },
+            onPencilShortcut: toolBar.perform
+        )
+        // The canvas keeps its size when a keyboard comes up: PencilKit drops a lasso selection
+        // whenever its view is resized.
+        .ignoresSafeArea(.all, edges: [.horizontal, .bottom])
     }
 
     private var title: Binding<String> {
