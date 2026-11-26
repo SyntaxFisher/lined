@@ -11,10 +11,36 @@ nonisolated extension PKStroke: @retroactive InkStroke {
         return first.location.applying(transform)
     }
 
+    public var bounds: CGRect { renderBounds }
+
     public func moved(by offset: CGVector) -> PKStroke {
         var stroke = self
         stroke.transform = transform.concatenating(CGAffineTransform(translationX: offset.dx, y: offset.dy))
         return stroke
+    }
+
+    /// A stroke is cut with its mask, which PencilKit keeps in the coordinates of the stroke's path.
+    ///
+    /// The cut stroke is a new stroke with an identity of its own: a canvas draws a stroke it
+    /// already shows again only when the stroke's identity changes.
+    public func clipped(to rect: CGRect) -> PKStroke? {
+        guard draws(in: rect) else { return nil }
+        var clip = UIBezierPath(rect: rect)
+        clip.apply(transform.inverted())
+        if let mask {
+            let remaining = clip.cgPath.intersection(mask.cgPath)
+            guard !remaining.isEmpty else { return nil }
+            clip = UIBezierPath(cgPath: remaining)
+        }
+        return PKStroke(ink: ink, path: path, transform: transform, mask: clip, randomSeed: randomSeed)
+    }
+
+    /// Whether the line of the stroke comes within its own width of `rect`.
+    private func draws(in rect: CGRect) -> Bool {
+        path.interpolatedPoints(by: .distance(2)).contains { point in
+            let reach = max(point.size.width, point.size.height) / 2
+            return rect.insetBy(dx: -reach, dy: -reach).contains(point.location.applying(transform))
+        }
     }
 
     public func fingerprint(into hasher: inout Hasher, relativeTo origin: CGPoint) {

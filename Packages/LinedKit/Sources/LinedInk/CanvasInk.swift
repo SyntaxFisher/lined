@@ -60,6 +60,30 @@ public struct CanvasInk<PageID: Hashable, Stroke: InkStroke> {
         public var pagesMissingInk: Set<PageID> = []
     }
 
+    /// Notes strokes that were drawn on top of the ink the canvas held, without looking at the rest
+    /// of its ink.
+    ///
+    /// - Parameters:
+    ///   - strokes: The new strokes where they lie in the canvas, in the order they were drawn.
+    ///   - pageIDs: The pages in the order of the layout.
+    public mutating func add(_ strokes: [Stroke], layout: PageStackLayout, pageIDs: [PageID]) -> Comparison {
+        var comparison = Comparison()
+        let added = DocumentInk.strokesByPage(in: strokes, layout: layout)
+        for (index, onPage) in added.sorted(by: { $0.key < $1.key }) where index < pageIDs.count {
+            let pageID = pageIDs[index]
+            guard var entry = entries[pageID] else {
+                comparison.pagesMissingInk.insert(pageID)
+                continue
+            }
+            let before = entry.strokes
+            entry.strokes += DocumentInk.lifted(onPage, fromPageAt: index, layout: layout)
+            entry.fingerprint.add(onPage, relativeTo: layout.frame(ofPageAt: index).origin)
+            entries[pageID] = entry
+            comparison.changes.append(InkChange(pageID: pageID, before: before, after: entry.strokes))
+        }
+        return comparison
+    }
+
     /// Compares the strokes of a canvas with the record.
     ///
     /// - Parameter pageIDs: The pages in the order of the layout.

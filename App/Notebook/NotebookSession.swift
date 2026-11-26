@@ -89,6 +89,7 @@ final class NotebookSession: NotebookHistory {
 
     /// Brings the disk up to date with the ink and the place the reader is at.
     func save() async {
+        canvas?.reportPendingInk()
         await ink.save()
         let viewState = NotebookViewState(lastViewedPageID: currentPage.id)
         guard viewState != savedViewState else { return }
@@ -134,7 +135,7 @@ final class NotebookSession: NotebookHistory {
 
     private func take(_ changes: [PageInkChange]) {
         for change in changes {
-            ink.setDrawing(PKDrawing(strokes: change.after), for: change.pageID)
+            ink.setStrokes(change.after, for: change.pageID)
             inkRevisions[change.pageID, default: 0] += 1
         }
     }
@@ -154,12 +155,14 @@ final class NotebookSession: NotebookHistory {
     // MARK: Undo
 
     func undo() {
+        canvas?.reportPendingInk()
         if let changes = history.undo() {
             restore(changes)
         }
     }
 
     func redo() {
+        canvas?.reportPendingInk()
         if let changes = history.redo() {
             restore(changes)
         }
@@ -194,7 +197,7 @@ extension NotebookSession: PagedCanvasDelegate {
     }
 
     func ink(for pageID: Page.ID) async -> [PKStroke] {
-        await ink.beginDisplaying(pageID).strokes
+        await ink.beginDisplaying(pageID)
     }
 
     func canvasDidEndDisplayingInk(of pageID: Page.ID) {

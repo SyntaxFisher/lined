@@ -22,6 +22,9 @@ protocol PagedCanvasDelegate: AnyObject {
 /// The commands a notebook sends to the canvas that shows it.
 protocol PagedCanvasControlling: AnyObject {
     func setPages(_ pages: [Page])
+    /// Reports at once the ink that the canvas would report when the writing pauses. What the
+    /// notebook does next, like saving or undoing, then starts from all that was drawn.
+    func reportPendingInk()
     /// Replaces the ink of a page with what an undone or redone step left there, in page points.
     func setInk(_ strokes: [PKStroke], for pageID: Page.ID)
     func scroll(to pageID: Page.ID, animated: Bool)
@@ -64,16 +67,27 @@ final class PagedCanvasView: UIView {
     private enum ZoomLimit {
         static let minimumRelativeToFit: CGFloat = 0.5
         static let maximumRelativeToFit: CGFloat = 5
+        /// PencilKit magnifies its canvas no further.
+        static let maximum: CGFloat = 10
     }
 
     /// How far around the viewport the canvas holds ink, in viewport heights.
     private enum InkReach {
         /// Pages this close have their ink loaded before they scroll into view.
-        static let load: CGFloat = 1.5
+        static let load: CGFloat = 1
         /// Pages farther away give their ink up. The distance to `load` keeps a page from loading
         /// and unloading while the view moves back and forth.
-        static let keep: CGFloat = 3
+        static let keep: CGFloat = 2
+        /// While the view scrolls, pages give their ink up this many at a time: taking ink out of
+        /// the canvas costs as much for one page as for several.
+        static let pagesReleasedTogether = 4
     }
+
+    /// How long the ink is left alone after a tool has lifted or the ink has changed, before the
+    /// canvas reads it and replaces it. PencilKit finishes a stroke shortly after the tool has lifted,
+    /// and the stroke must find the ink it was drawn on. Reading the ink takes time with every stroke
+    /// the canvas holds, so it waits for a pause in the writing as well.
+    private static let inkSettlingTime = Duration.milliseconds(120)
 
     /// Room below the last page, so that its end can be scrolled clear of a tool bar docked at the bottom.
     private static let bottomClearance: CGFloat = 96
@@ -83,7 +97,7 @@ final class PagedCanvasView: UIView {
     private let canvas = InkCanvasView()
     /// Holds the page backgrounds beneath the ink, laid out in document points.
     private let pagesView = UIView()
-    private let deskMask = DeskMaskView()
+    private let desk = DeskView()
     private let renderPool = BackgroundRenderPool()
 
     private var pages: [Page] = []
@@ -102,8 +116,17 @@ final class PagedCanvasView: UIView {
     private var inkRequests: Set<Page.ID> = []
     /// Stored ink that arrived while the canvas could not take it.
     private var arrivedInk: [Page.ID: [PKStroke]] = [:]
+    /// Pages that were drawn on before their stored ink arrived.
+    private var pagesDrawnOnEarly: Set<Page.ID> = []
     private var isToolInUse = false
     private var hasUnreportedInk = false
+    /// The strokes of the canvas when the record last agreed with all of them: how many there were
+    /// and which was the last. Strokes drawn since lie on top of these and are told apart by that,
+    /// without a look at the rest of the ink. `nil` when more than drawing may have changed the ink.
+    private var reportedInk: (count: Int, lastID: UUID?)?
+    /// Runs while the ink settles after a tool was used or the ink has changed.
+    private var inkSettling: Task<Void, Never>?
+    private var hasErased = false
     private var keyboardObserver: (any NSObjectProtocol)?
     private var currentPageIndex: Int?
     private var pendingScrollTarget: Page.ID?
@@ -121,12 +144,12 @@ final class PagedCanvasView: UIView {
         canvas.overrideUserInterfaceStyle = .light
         addSubview(canvas)
 
-        for view in [pagesView, deskMask] {
+        for view in [pagesView, desk] {
             view.layer.anchorPoint = .zero
             view.isUserInteractionEnabled = false
         }
         canvas.insertSubview(pagesView, at: 0)
-        canvas.addSubview(deskMask)
+        canvas.addSubview(desk)
         canvas.addInteraction(UIPencilInteraction(delegate: self))
 
         updateDeskColor()
@@ -148,12 +171,13 @@ final class PagedCanvasView: UIView {
     }
 
     isolated deinit {
+        inkSettling?.cancel()
         keyboardObserver.map(NotificationCenter.default.removeObserver)
     }
 
-    /// The mask lives inside the canvas, which is always light, and has to follow the app's appearance itself.
+    /// The desk lies inside the canvas, which is always light, and has to follow the app's appearance itself.
     private func updateDeskColor() {
-        deskMask.deskColor = Self.deskColor.resolvedColor(with: traitCollection)
+        desk.deskColor = Self.deskColor.resolvedColor(with: traitCollection)
     }
 
     // MARK: Layout
@@ -206,7 +230,7 @@ final class PagedCanvasView: UIView {
 
         let fit = fitZoom
         let minimum = fit * ZoomLimit.minimumRelativeToFit
-        let maximum = fit * ZoomLimit.maximumRelativeToFit
+        let maximum = min(fit * ZoomLimit.maximumRelativeToFit, ZoomLimit.maximum)
         // The limits are widened first: a zoom outside the current limits would be clamped to them.
         canvas.minimumZoomScale = min(canvas.minimumZoomScale, minimum)
         canvas.maximumZoomScale = max(canvas.maximumZoomScale, maximum)
@@ -218,7 +242,7 @@ final class PagedCanvasView: UIView {
             height: layout.contentSize.height * canvas.zoomScale
         )
         pagesView.bounds = CGRect(origin: .zero, size: layout.contentSize)
-        deskMask.bounds = pagesView.bounds
+        desk.bounds = pagesView.bounds
         applyZoomToPages()
         updateContentInset()
     }
@@ -226,7 +250,7 @@ final class PagedCanvasView: UIView {
     /// The canvas magnifies its ink itself; the views that share its document coordinates follow here.
     private func applyZoomToPages() {
         let scale = CGAffineTransform(scaleX: canvas.zoomScale, y: canvas.zoomScale)
-        for view in [pagesView, deskMask] {
+        for view in [pagesView, desk] {
             view.layer.position = .zero
             view.transform = scale
         }
@@ -272,11 +296,10 @@ final class PagedCanvasView: UIView {
                 pixelsPerPoint: pixelsPerPoint
             )
         }
-        let shown = layout.pageIndices(intersecting: reach).map(layout.frame(ofPageAt:))
-        deskMask.uncover(shown, within: reach.union(CGRect(origin: .zero, size: layout.contentSize)).insetBy(dx: -reach.width, dy: -reach.height))
+        showDesk(around: visible)
         reportCurrentPage(in: visible)
         requestInk(around: visible)
-        releaseDistantInk()
+        releaseDistantInk(isScrolling: isScrolling)
     }
 
     // MARK: Page views
@@ -312,6 +335,14 @@ final class PagedCanvasView: UIView {
         view.removeFromSuperview()
         view.reset()
         reusablePageViews.append(view)
+    }
+
+    /// Covers what lies around the pages, a viewport further than can be seen: a zoom that springs
+    /// back from beyond its limit comes to rest inside that.
+    private func showDesk(around visible: CGRect) {
+        let area = visible.insetBy(dx: -visible.width, dy: -visible.height)
+        let shown = layout.pageIndices(intersecting: area).compactMap { pageViews[pages[$0].id]?.frame }
+        desk.show(Desk.rects(around: shown, in: area))
     }
 
     private func reportCurrentPage(in visible: CGRect) {
@@ -360,12 +391,17 @@ final class PagedCanvasView: UIView {
 
     /// Replacing the ink under a tool would take the stroke away from it, and replacing it during
     /// a pinch would re-render what PencilKit is magnifying.
-    private var canReplaceInk: Bool { !isToolInUse && !isZooming }
+    private var canReplaceInk: Bool { !isToolInUse && inkSettling == nil && !isZooming }
 
     private func replaceInk(with strokes: [PKStroke]) {
+        replaceInk(with: PKDrawing(strokes: strokes))
+    }
+
+    private func replaceInk(with drawing: PKDrawing) {
         isReplacingInk = true
-        canvas.drawing = PKDrawing(strokes: strokes)
+        canvas.drawing = drawing
         isReplacingInk = false
+        reportedInk = nil
     }
 
     private func pageIDs(within reach: CGFloat, of visible: CGRect) -> [Page.ID] {
@@ -393,7 +429,7 @@ final class PagedCanvasView: UIView {
 
     private func inkDidArrive(_ strokes: [PKStroke], for pageID: Page.ID) {
         // The request is gone when the page was removed in the meantime.
-        guard inkRequests.remove(pageID) != nil else { return }
+        guard inkRequests.remove(pageID) != nil, indexByPageID[pageID] != nil else { return }
         guard pageIDs(within: InkReach.keep, of: visibleRect).contains(pageID) else {
             delegate?.canvasDidEndDisplayingInk(of: pageID)
             return
@@ -402,35 +438,65 @@ final class PagedCanvasView: UIView {
         showArrivedInk()
     }
 
-    /// Puts stored ink that has arrived into the canvas, beneath what was drawn on its page meanwhile.
+    /// Puts stored ink that has arrived into the canvas.
+    ///
+    /// The ink is added to what the canvas holds, which costs no more than the arriving ink itself.
+    /// Only where a page was drawn on before its stored ink arrived is the ink of the canvas put
+    /// together anew, with the stored ink beneath what was drawn.
     private func showArrivedInk() {
         guard canReplaceInk, !arrivedInk.isEmpty else { return }
-        var strokes = canvas.drawing.strokes
-        let countBefore = strokes.count
+        var arrived: [Int: [PKStroke]] = [:]
+        var wasDrawnOn = false
         for (pageID, ink) in arrivedInk {
             guard let index = indexByPageID[pageID] else { continue }
-            strokes = DocumentInk.strokes(strokes, adding: ink, beneathPageAt: index, layout: layout)
+            arrived[index] = ink
             inkRecord.set(ink, for: pageID)
+            wasDrawnOn = pagesDrawnOnEarly.remove(pageID) != nil || wasDrawnOn
         }
         arrivedInk.removeAll()
-        if strokes.count != countBefore {
+
+        if wasDrawnOn {
+            var strokes = canvas.drawing.strokes
+            for (index, ink) in arrived {
+                strokes = DocumentInk.strokes(strokes, adding: ink, beneathPageAt: index, layout: layout)
+            }
             replaceInk(with: strokes)
+            reportInkChanges()
+            return
         }
-        reportInkChanges()
+
+        let placed = DocumentInk.strokes(joining: arrived, layout: layout)
+        guard !placed.isEmpty else { return }
+        let reported = reportedInk
+        var drawing = canvas.drawing
+        drawing.append(PKDrawing(strokes: placed))
+        replaceInk(with: drawing)
+        // The record took the arriving ink above and agrees with the canvas as it did before.
+        reportedInk = reported.map { (count: $0.count + placed.count, lastID: placed.last?.id) }
     }
 
+    private var isScrolling: Bool { canvas.isDragging || canvas.isDecelerating }
+
     /// Takes the ink of pages far from the viewport out of the canvas. It stays with the notebook.
-    private func releaseDistantInk() {
+    ///
+    /// - Parameter isScrolling: While the view scrolls, pages wait until several of them can give
+    ///   their ink up together.
+    private func releaseDistantInk(isScrolling: Bool) {
         guard canReplaceInk, viewportSize != .zero else { return }
         let kept = Set(pageIDs(within: InkReach.keep, of: visibleRect))
         let leaving = inkRecord.pageIDs.subtracting(kept)
-        guard !leaving.isEmpty else { return }
+        guard !leaving.isEmpty, !isScrolling || leaving.count >= InkReach.pagesReleasedTogether else { return }
 
-        reportInkChanges()
+        // Ink that leaves the canvas unreported would be lost.
+        if hasUnreportedInk {
+            reportInkChanges()
+        }
+        let agrees = reportedInk != nil
         let strokes = canvas.drawing.strokes
         let remaining = DocumentInk.strokes(strokes, removingPagesAt: Set(leaving.compactMap { indexByPageID[$0] }), layout: layout)
         if remaining.count != strokes.count {
             replaceInk(with: remaining)
+            reportedInk = agrees ? (remaining.count, remaining.last?.id) : nil
         }
         for pageID in leaving {
             inkRecord.remove(pageID)
@@ -438,11 +504,69 @@ final class PagedCanvasView: UIView {
         }
     }
 
-    /// Tells the notebook which pages' ink differs from what it was told last.
+    /// Waits for the ink to settle, then brings the canvas and the notebook up to date.
+    private func settleInk() {
+        inkSettling?.cancel()
+        inkSettling = Task { [weak self] in
+            try? await Task.sleep(for: Self.inkSettlingTime)
+            guard !Task.isCancelled, let self else { return }
+            self.inkSettling = nil
+            self.inkDidSettle()
+        }
+    }
+
+    private func inkDidSettle() {
+        guard !isToolInUse else { return }
+        if hasUnreportedInk {
+            reportInkChanges()
+        }
+        showArrivedInk()
+        releaseDistantInk(isScrolling: isScrolling)
+        if hasErased {
+            hasErased = false
+            onEraseEnd?()
+        }
+    }
+
+    /// The strokes that were drawn on top of the ink the record agrees with, or `nil` when more than
+    /// that may have changed.
+    private func strokesDrawn(onTopOfReportedInkIn strokes: [PKStroke]) -> [PKStroke]? {
+        guard let reportedInk, strokes.count >= reportedInk.count else { return nil }
+        if reportedInk.count > 0, strokes[reportedInk.count - 1].id != reportedInk.lastID { return nil }
+        return Array(strokes[reportedInk.count...])
+    }
+
+    /// Cuts off what was drawn beyond the edge of a page and tells the notebook which pages' ink
+    /// differs from what it was told last.
+    ///
+    /// After plain drawing, that takes a look at the new strokes only, and each of them is a step
+    /// of its own to undo. After anything else, all the ink of the canvas is compared with the record.
     private func reportInkChanges() {
         hasUnreportedInk = false
-        let comparison = inkRecord.compare(with: canvas.drawing.strokes, layout: layout, pageIDs: pageIDs)
+        var strokes = canvas.drawing.strokes
+        if var drawn = strokesDrawn(onTopOfReportedInkIn: strokes) {
+            guard !drawn.isEmpty else { return }
+            if let kept = DocumentInk.strokesKeptOnPages(drawn, layout: layout) {
+                strokes.replaceSubrange((strokes.count - drawn.count)..., with: kept)
+                drawn = kept
+                replaceInk(with: strokes)
+            }
+            for stroke in drawn {
+                tellNotebook(inkRecord.add([stroke], layout: layout, pageIDs: pageIDs))
+            }
+        } else {
+            if let kept = DocumentInk.strokesKeptOnPages(strokes, layout: layout) {
+                strokes = kept
+                replaceInk(with: kept)
+            }
+            tellNotebook(inkRecord.compare(with: strokes, layout: layout, pageIDs: pageIDs))
+        }
+        reportedInk = (strokes.count, strokes.last?.id)
+    }
+
+    private func tellNotebook(_ comparison: CanvasInk<Page.ID, PKStroke>.Comparison) {
         // A stroke can land on a page before its stored ink has. It is reported once both are there.
+        pagesDrawnOnEarly.formUnion(comparison.pagesMissingInk)
         for pageID in comparison.pagesMissingInk where !holdsOrAwaitsInk(of: pageID) {
             requestInk(of: pageID)
         }
@@ -463,6 +587,7 @@ final class PagedCanvasView: UIView {
                 inkRecord.remove(pageID)
                 inkRequests.remove(pageID)
                 arrivedInk[pageID] = nil
+                pagesDrawnOnEarly.remove(pageID)
                 keepsItsPlace = false
             }
         }
@@ -479,6 +604,8 @@ final class PagedCanvasView: UIView {
 
     private func applyTool() {
         canvas.tool = tools.pencilKitTool
+        // A selection that the lasso leaves behind is put down when the tool changes.
+        reportedInk = nil
         applySelectionGestures()
     }
 
@@ -494,6 +621,13 @@ final class PagedCanvasView: UIView {
     override var canBecomeFirstResponder: Bool { true }
 
     override var undoManager: UndoManager? { delegate?.undoManager }
+
+    override func willMove(toWindow newWindow: UIWindow?) {
+        super.willMove(toWindow: newWindow)
+        if newWindow == nil {
+            reportPendingInk()
+        }
+    }
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
@@ -518,7 +652,7 @@ extension PagedCanvasView: PagedCanvasControlling {
         guard newPages != pages else { return }
         let position = viewportSize == .zero ? nil : readingPosition()
         // What was drawn last is reported while the pages are still where it was drawn.
-        reportInkChanges()
+        reportPendingInk()
         let oldPageIDs = pageIDs
         let oldLayout = layout
         pages = newPages
@@ -539,13 +673,23 @@ extension PagedCanvasView: PagedCanvasControlling {
         settle()
     }
 
+    func reportPendingInk() {
+        guard hasUnreportedInk, !isToolInUse else { return }
+        inkSettling?.cancel()
+        inkSettling = nil
+        inkDidSettle()
+    }
+
     func setInk(_ strokes: [PKStroke], for pageID: Page.ID) {
         if arrivedInk[pageID] != nil {
             arrivedInk[pageID] = strokes
         }
         guard inkRecord.contains(pageID), let index = indexByPageID[pageID] else { return }
-        replaceInk(with: DocumentInk.strokes(canvas.drawing.strokes, replacingPageAt: index, with: strokes, layout: layout))
+        let agrees = reportedInk != nil && !hasUnreportedInk
+        let ink = DocumentInk.strokes(canvas.drawing.strokes, replacingPageAt: index, with: strokes, layout: layout)
+        replaceInk(with: ink)
         inkRecord.set(strokes, for: pageID)
+        reportedInk = agrees ? (ink.count, ink.last?.id) : nil
     }
 
     func scroll(to pageID: Page.ID, animated: Bool) {
@@ -567,34 +711,45 @@ extension PagedCanvasView: PagedCanvasControlling {
 extension PagedCanvasView: PKCanvasViewDelegate {
     func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
         isToolInUse = true
+        inkSettling?.cancel()
+        inkSettling = nil
+        hasErased = hasErased || canvasView.tool is PKEraserTool
         onToolBegin?()
     }
 
+
     func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {
         isToolInUse = false
-        if hasUnreportedInk {
-            reportInkChanges()
-        }
-        showArrivedInk()
-        releaseDistantInk()
-        if canvasView.tool is PKEraserTool {
-            onEraseEnd?()
-        }
+        settleInk()
     }
 
-    /// An eraser or a lasso changes the ink many times while it moves. What it did is reported once,
-    /// when it lifts, so that it is one step to undo.
+    /// The ink is not looked at here. An eraser or a lasso changes it many times while it moves,
+    /// and what it did is one step to undo; a stroke may have to be cut at the edge of its page
+    /// before it is reported; and while the writing goes on, nothing is to hold it up.
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
         guard !isReplacingInk else { return }
-        if isToolInUse {
-            hasUnreportedInk = true
-        } else {
-            reportInkChanges()
+        // Only a pen or a highlighter leaves the ink beneath its strokes as it was.
+        if !(canvasView.tool is PKInkingTool) {
+            reportedInk = nil
+        }
+        hasUnreportedInk = true
+        if !isToolInUse {
+            settleInk()
         }
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         refresh()
+    }
+
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if !decelerate {
+            releaseDistantInk(isScrolling: false)
+        }
+    }
+
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        releaseDistantInk(isScrolling: false)
     }
 
     func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {

@@ -99,4 +99,33 @@ struct CanvasInkTests {
         #expect(change.reversed.before == stored)
         #expect(change.reversed.after.isEmpty)
     }
+
+    @Test func notesAddedStrokesLikeAComparisonWould() {
+        var added = CanvasInk<String, TestStroke>()
+        added.set(stored, for: "b")
+        added.set([], for: "c")
+        var compared = added
+        let loaded = DocumentInk.strokes(joining: [1: stored], layout: layout)
+        let new = [onPage(2, 5, 5), onPage(1, 100, 100), onPage(1, 200, 200)]
+
+        let fromAdding = added.add(new, layout: layout, pageIDs: pageIDs)
+        let fromComparing = compared.compare(with: loaded + new, layout: layout, pageIDs: pageIDs)
+
+        #expect(fromAdding.changes.map(\.pageID) == ["b", "c"])
+        #expect(fromAdding.changes.map(\.before) == fromComparing.changes.map(\.before))
+        #expect(fromAdding.changes.map(\.after) == fromComparing.changes.map(\.after))
+        #expect(fromAdding.changes[0].after == stored + [TestStroke(100, 100), TestStroke(200, 200)])
+        // After adding, the record agrees with the canvas as a comparison sees it.
+        #expect(added.compare(with: loaded + new, layout: layout, pageIDs: pageIDs).changes.isEmpty)
+    }
+
+    @Test func leavesAddedStrokesOfAPageWithoutItsInkForLater() {
+        var record = CanvasInk<String, TestStroke>()
+        record.set(stored, for: "b")
+
+        let comparison = record.add([onPage(2, 5, 5)], layout: layout, pageIDs: pageIDs)
+
+        #expect(comparison.changes.isEmpty)
+        #expect(comparison.pagesMissingInk == ["c"])
+    }
 }

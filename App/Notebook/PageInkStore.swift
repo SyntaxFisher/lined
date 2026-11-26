@@ -8,7 +8,7 @@ final class PageInkStore {
     var onSaveFailure: ((any Error) -> Void)?
 
     private let files: NotebookFiles
-    private var drawings: [Page.ID: PKDrawing] = [:]
+    private var strokes: [Page.ID: [PKStroke]] = [:]
     private var displayedPages: Set<Page.ID> = []
     private var unsavedPages: Set<Page.ID> = []
     private var scheduledSave: Task<Void, Never>?
@@ -18,9 +18,16 @@ final class PageInkStore {
     }
 
     /// The page's ink for showing it on screen. It stays in memory until `endDisplaying(_:)`.
-    func beginDisplaying(_ pageID: Page.ID) async -> PKDrawing {
+    func beginDisplaying(_ pageID: Page.ID) async -> [PKStroke] {
         displayedPages.insert(pageID)
-        return await drawing(for: pageID)
+        if let held = strokes[pageID] { return held }
+        let stored = await files.loadDrawing(for: pageID).strokes
+        // An edit may have arrived while the file was being read.
+        if let held = strokes[pageID] { return held }
+        if displayedPages.contains(pageID) {
+            strokes[pageID] = stored
+        }
+        return stored
     }
 
     func endDisplaying(_ pageID: Page.ID) {
@@ -28,21 +35,21 @@ final class PageInkStore {
         releaseIfUnneeded(pageID)
     }
 
+    /// The page's ink as one drawing, for a picture of the page.
     func drawing(for pageID: Page.ID) async -> PKDrawing {
-        if let drawing = drawings[pageID] { return drawing }
+        if let held = strokes[pageID] { return PKDrawing(strokes: held) }
         let stored = await files.loadDrawing(for: pageID)
         // An edit may have arrived while the file was being read.
-        if let drawing = drawings[pageID] { return drawing }
-        if displayedPages.contains(pageID) {
-            drawings[pageID] = stored
-        }
-        return stored
+        return strokes[pageID].map { PKDrawing(strokes: $0) } ?? stored
     }
 
     /// Takes the page's changed ink. While writing goes on, the ink reaches the disk about once
     /// a second, not after every stroke and not only when the writing pauses.
-    func setDrawing(_ drawing: PKDrawing, for pageID: Page.ID) {
-        drawings[pageID] = drawing
+    ///
+    /// The strokes are kept as they come: putting them together as a drawing takes time with every
+    /// stroke of the page, and is left to the moment the page is saved.
+    func setStrokes(_ strokes: [PKStroke], for pageID: Page.ID) {
+        self.strokes[pageID] = strokes
         unsavedPages.insert(pageID)
         guard scheduledSave == nil else { return }
         scheduledSave = Task { [weak self] in
@@ -54,7 +61,7 @@ final class PageInkStore {
 
     /// Forgets a page that has been removed from the notebook.
     func discard(_ pageID: Page.ID) {
-        drawings[pageID] = nil
+        strokes[pageID] = nil
         displayedPages.remove(pageID)
         unsavedPages.remove(pageID)
     }
@@ -66,9 +73,9 @@ final class PageInkStore {
         guard !pending.isEmpty else { return }
         unsavedPages.removeAll()
         for pageID in pending {
-            guard let drawing = drawings[pageID] else { continue }
+            guard let strokes = strokes[pageID] else { continue }
             do {
-                try await files.saveDrawing(drawing, for: pageID)
+                try await files.saveDrawing(PKDrawing(strokes: strokes), for: pageID)
             } catch {
                 unsavedPages.insert(pageID)
                 onSaveFailure?(error)
@@ -80,7 +87,7 @@ final class PageInkStore {
 
     private func releaseIfUnneeded(_ pageID: Page.ID) {
         if !displayedPages.contains(pageID), !unsavedPages.contains(pageID) {
-            drawings[pageID] = nil
+            strokes[pageID] = nil
         }
     }
 }

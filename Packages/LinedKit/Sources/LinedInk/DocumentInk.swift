@@ -5,7 +5,7 @@ import LinedLayout
 ///
 /// Pages store their ink in page points. The canvas draws in document points, where each page lies at
 /// its frame in the stack. A stroke belongs to the page it starts on, or to the nearest page when it
-/// starts between pages, and keeps that page even where it runs past the page's edge.
+/// starts between pages. Ink ends at the edge of its page: what a stroke draws beyond it is cut off.
 ///
 /// Pages are addressed by their index in the layout.
 public enum DocumentInk {
@@ -87,6 +87,30 @@ public enum DocumentInk {
             let to = newLayout.frame(ofPageAt: newIndex).origin
             return from == to ? stroke : stroke.moved(by: CGVector(dx: to.x - from.x, dy: to.y - from.y))
         }
+    }
+
+    /// Keeps every stroke inside the page it belongs to.
+    ///
+    /// - Returns: The strokes, or `nil` when all of them lie inside their pages already.
+    public static func strokesKeptOnPages<Stroke: InkStroke>(_ strokes: [Stroke], layout: PageStackLayout) -> [Stroke]? {
+        var kept: [Stroke] = []
+        var isChanged = false
+        for stroke in strokes {
+            guard let index = pageIndex(of: stroke, layout: layout) else { continue }
+            let page = layout.frame(ofPageAt: index)
+            if lies(stroke, inside: page) {
+                kept.append(stroke)
+            } else {
+                isChanged = true
+                stroke.clipped(to: page).map { kept.append($0) }
+            }
+        }
+        return isChanged ? kept : nil
+    }
+
+    /// Whether a stroke stays inside `rect`, give or take the rounding of moving it between pages and the stack.
+    private static func lies(_ stroke: some InkStroke, inside rect: CGRect) -> Bool {
+        rect.insetBy(dx: -0.01, dy: -0.01).contains(stroke.bounds)
     }
 
     /// The page a stroke belongs to, or `nil` when the stack is empty.
