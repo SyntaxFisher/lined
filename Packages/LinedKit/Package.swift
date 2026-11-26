@@ -9,16 +9,19 @@ let package = Package(
         .library(name: "LinedStorage", targets: ["LinedStorage"]),
         .library(name: "LinedRendering", targets: ["LinedRendering"]),
         .library(name: "LinedLayout", targets: ["LinedLayout"]),
+        .library(name: "LinedInk", targets: ["LinedInk"]),
     ],
     targets: [
         .target(name: "LinedModel"),
         .target(name: "LinedStorage", dependencies: ["LinedModel"]),
         .target(name: "LinedRendering", dependencies: ["LinedModel"]),
         .target(name: "LinedLayout"),
+        .target(name: "LinedInk", dependencies: ["LinedLayout"]),
         .testTarget(name: "LinedModelTests", dependencies: ["LinedModel"]),
         .testTarget(name: "LinedStorageTests", dependencies: ["LinedStorage"]),
         .testTarget(name: "LinedRenderingTests", dependencies: ["LinedRendering"]),
         .testTarget(name: "LinedLayoutTests", dependencies: ["LinedLayout"]),
+        .testTarget(name: "LinedInkTests", dependencies: ["LinedInk"]),
     ],
     swiftLanguageModes: [.v6]
 )
