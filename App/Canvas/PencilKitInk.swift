@@ -25,18 +25,33 @@ nonisolated extension PKStroke: @retroactive InkStroke {
     /// A stroke is cut with its mask, which PencilKit keeps in the coordinates of the stroke's path.
     /// The rest of the stroke still has the whole path, and starts where its path enters the mask.
     ///
+    /// The mask hugs the line: the stroke eraser takes a stroke away wherever its mask is touched,
+    /// so a mask in the shape of the whole page would let a tap anywhere on the page erase it.
+    ///
     /// The cut stroke is a new stroke with an identity of its own: a canvas draws a stroke it
     /// already shows again only when the stroke's identity changes.
     public func clipped(to rect: CGRect) -> PKStroke? {
         guard draws(in: rect) else { return nil }
-        var clip = UIBezierPath(rect: rect)
-        clip.apply(transform.inverted())
+        let page = UIBezierPath(rect: rect)
+        page.apply(transform.inverted())
+        var clip = page.cgPath.intersection(lineArea)
         if let mask {
-            let remaining = clip.cgPath.intersection(mask.cgPath)
-            guard !remaining.isEmpty else { return nil }
-            clip = UIBezierPath(cgPath: remaining)
+            clip = clip.intersection(mask.cgPath)
         }
-        return PKStroke(ink: ink, path: path, transform: transform, mask: clip, randomSeed: randomSeed)
+        guard !clip.isEmpty else { return nil }
+        return PKStroke(ink: ink, path: path, transform: transform, mask: UIBezierPath(cgPath: clip), randomSeed: randomSeed)
+    }
+
+    /// The area the line of the stroke covers, with room to spare, in the coordinates of its path.
+    private var lineArea: CGPath {
+        let points = Array(path.interpolatedPoints(by: .distance(2)))
+        let width = points.map { max($0.size.width, $0.size.height) }.max() ?? 0
+        let line = CGMutablePath()
+        line.addLines(between: points.map(\.location))
+        if let only = points.first, points.count == 1 {
+            line.addLine(to: CGPoint(x: only.location.x + 0.01, y: only.location.y))
+        }
+        return line.copy(strokingWithWidth: width * 2 + 4, lineCap: .round, lineJoin: .round, miterLimit: 1)
     }
 
     /// Whether the line of the stroke comes within its own width of `rect`.

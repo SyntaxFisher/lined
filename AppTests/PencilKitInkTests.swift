@@ -43,6 +43,26 @@ struct PencilKitInkTests {
         }
     }
 
+    /// The stroke eraser takes a stroke away wherever its mask is touched.
+    @Test func thePartsOfASplitStrokeAreErasedOnlyNearTheirLine() throws {
+        let first = layout.frame(ofPageAt: 0)
+        let second = layout.frame(ofPageAt: 1)
+        let stroke = PKStroke.line(from: CGPoint(x: 100, y: first.maxY - 100), to: CGPoint(x: 300, y: second.minY + 100), width: 4)
+
+        let parts = try #require(DocumentInk.strokesSplitAtPages([stroke], layout: layout))
+
+        for (index, part) in parts.enumerated() {
+            let page = layout.frame(ofPageAt: index)
+            let mask = try #require(part.mask)
+            let toPath = part.transform.inverted()
+            let onLine = try #require(part.path.first { page.contains($0.location.applying(part.transform)) }).location
+            #expect(mask.contains(onLine))
+            for far in [CGPoint(x: page.midX, y: page.midY), CGPoint(x: page.maxX - 20, y: page.minY + 20), CGPoint(x: page.maxX - 20, y: page.maxY - 20)] {
+                #expect(!mask.contains(far.applying(toPath)), "page \(index), \(far)")
+            }
+        }
+    }
+
     @Test func aStrokeThatStaysOnItsPageIsLeftAlone() {
         let first = layout.frame(ofPageAt: 0)
         let stroke = PKStroke.line(from: CGPoint(x: first.minX + 50, y: first.minY + 50), to: CGPoint(x: first.maxX - 50, y: first.maxY - 50))
