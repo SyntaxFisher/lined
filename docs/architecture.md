@@ -59,11 +59,12 @@ ends at ten, which is as far as PencilKit magnifies a canvas.
 - **Pages of strokes.** A stroke belongs to the page it starts on, or to the nearest page when it
   starts between two. Moving ink between page points and document points only changes a stroke's
   transform, so strokes keep their identity and their eraser masks.
-- **Ink ends at the page.** A stroke that is drawn, moved or pasted past the edge of its page is
-  cut off there once the tool has lifted: a mask keeps the line on its page, and what it draws on
-  other pages or beside them is dropped. A stroke thus stays one stroke on one page, which is what
-  a page stores, exports and shows in its thumbnail, and what the lasso and the eraser take as a
-  whole. A stroke with a mask counts as starting where its path first enters the mask.
+- **Ink ends at the page.** A stroke that is drawn, moved or pasted across the edge of its page is
+  split there once the tool has lifted: it becomes one stroke on each page it draws on, each with a
+  mask that covers its line on that page, and what it draws beside the pages is dropped. The parts
+  of a stroke are one undo step. Every stroke therefore lies inside one page, which is what a page
+  stores, exports and shows in its thumbnail. A stroke with a mask counts as starting where its
+  path first enters the mask, so each part belongs to the page it lies on.
 - **Backgrounds.** `PageBackgroundView` shows bitmaps rendered off the main thread, beneath the ink.
   A base image covers the whole page at screen resolution up to a pixel budget. Beyond that budget,
   a detail image at screen resolution covers the visible part of the page. An image stays on screen
@@ -87,8 +88,8 @@ These properties of PencilKit shape the canvas:
 - Reading the ink of a canvas takes time with every stroke it holds, however little of it changed.
   The canvas reads its ink once the writing pauses, not after every stroke, and keeps the number of
   pages whose ink it holds small.
-- A canvas draws a stroke it already shows again only when the stroke's identity changes. A stroke
-  that is cut off at its page is therefore a new stroke.
+- A canvas draws a stroke it already shows again only when the stroke's identity changes. The parts
+  of a split stroke are therefore new strokes.
 - The stroke eraser takes a stroke away wherever its mask is touched, not only near its line. A
   mask therefore stays close to the line it shows.
 - PencilKit drops a lasso selection whenever its view is resized, so the canvas keeps its size when
@@ -150,7 +151,7 @@ and `Sendable`.
   Interface code elsewhere is SwiftUI.
 - New logic that can be expressed without UIKit goes into the package, with tests. PencilKit does
   not run in the package's tests; code that handles strokes there is generic over `InkStroke`.
-- Behaviour that depends on PencilKit or UIKit, such as how strokes are cut off at their page or how the canvas
+- Behaviour that depends on PencilKit or UIKit, such as how strokes are split or how the canvas
   reports and zooms, is covered by the app tests in `AppTests`.
 - The model never knows about files, and storage never knows about views.
 - Persisted formats change only by the rules in [storage.md](storage.md).

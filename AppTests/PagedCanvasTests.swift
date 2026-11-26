@@ -76,7 +76,7 @@ private final class CanvasHarness: PagedCanvasDelegate {
 
 @MainActor
 struct PagedCanvasTests {
-    @Test func aStrokeDrawnIntoTheNextPageEndsAtTheEdgeOfItsOwn() async throws {
+    @Test func aStrokeDrawnAcrossTwoPagesStaysOnBoth() async throws {
         let canvas = try await CanvasHarness()
         defer { canvas.close() }
         let first = canvas.layout.frame(ofPageAt: 0)
@@ -85,20 +85,21 @@ struct PagedCanvasTests {
         try await canvas.draw(.line(from: CGPoint(x: first.midX, y: first.maxY - 80), to: CGPoint(x: first.midX + 60, y: second.minY + 80)))
 
         let shown = canvas.canvas.drawing
-        #expect(shown.strokes.count == 1)
+        #expect(shown.strokes.count == 2)
         #expect(shown.inkedPixels(in: first) > 50)
-        #expect(shown.inkedPixels(in: second.insetBy(dx: 0, dy: -9)) == 0)
+        #expect(shown.inkedPixels(in: second) > 50)
 
-        // One step to undo, with the ink of the first page in its own page's points.
+        // One step to undo, with the ink of both pages, each in its own page's points.
         #expect(canvas.reports.count == 1)
         let step = try #require(canvas.reports.first)
-        #expect(step.map(\.pageID) == [canvas.pages[0].id])
-        let change = try #require(step.first)
-        #expect(change.before.isEmpty)
-        #expect(change.after.count == 1)
-        let page = CGRect(origin: .zero, size: first.size).insetBy(dx: -0.5, dy: -0.5)
-        #expect(change.after.allSatisfy { page.contains($0.renderBounds) })
-        #expect(PKDrawing(strokes: change.after).inkedPixels(in: page) > 50)
+        #expect(step.map(\.pageID) == [canvas.pages[0].id, canvas.pages[1].id])
+        for change in step {
+            #expect(change.before.isEmpty)
+            #expect(change.after.count == 1)
+            let page = CGRect(origin: .zero, size: first.size).insetBy(dx: -0.5, dy: -0.5)
+            #expect(change.after.allSatisfy { page.contains($0.renderBounds) })
+            #expect(PKDrawing(strokes: change.after).inkedPixels(in: page) > 50)
+        }
     }
 
     @Test func strokesOnOnePageAreOneStepEach() async throws {

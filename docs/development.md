@@ -55,9 +55,9 @@ Logic belongs in the package so that it can be tested this way; the app target h
 wiring.
 
 The app tests run in the simulator with Swift Testing, hosted by the app, so they use the real
-PencilKit and UIKit: how strokes are cut off at the edge of their page, which widths PencilKit
-draws, what the canvas reports to the notebook, and how the paper follows the ink when a zoom
-springs back. Run them with `make test-app`
+PencilKit and UIKit: how strokes are split at the edge of a page, which widths PencilKit draws,
+what the canvas reports to the notebook, and how the paper follows the ink when a zoom springs
+back. Run them with `make test-app`
 before handing out a build.
 
 Interface changes are checked in the simulator, in light and dark mode. Finger drawing is on by
