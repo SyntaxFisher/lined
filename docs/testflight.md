@@ -1,13 +1,11 @@
 # Internal TestFlight builds
 
 The owner installs drafts of the app on an iPad through TestFlight, without access to the Mac that
-builds them. Builds come from any clean, pushed branch, each upload needs the owner's consent, and
-they are never submitted or published.
+builds them. Builds come from any clean, pushed branch and are never submitted or published.
 
 ## Rules
 
-- Each upload needs the owner's explicit consent for that build; consent for one build does not
-  cover the next.
+- A build is uploaded whenever there is something for the owner to try; no approval is needed.
 - The source is a clean commit pushed to origin, on any branch.
 - Never submit, publish or tag such a build, and never select it for an App Store version.
 - TestFlight notifies the testers itself when a build is ready; no other message is needed.

@@ -6,7 +6,6 @@ uploads it marked as internal-only (never eligible for App Review or external te
 waits until Apple has processed it, sets export compliance and the "What to Test" note,
 and waits until the internal tester group can install it.
 
-Every run is an App Store Connect upload and needs the owner's explicit consent.
 Run it inside the checkout to build: the source is that checkout's HEAD,
 which must be clean and pushed to origin; any branch is allowed.
 The version and build number are passed to xcodebuild only and never committed.

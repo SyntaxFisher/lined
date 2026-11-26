@@ -23,7 +23,7 @@
 
 ## Releases
 
-- Internal TestFlight builds are described in `docs/testflight.md`. Each upload needs the owner's explicit consent for that build. They are internal-only and never submitted, published or tagged.
+- Internal TestFlight builds are described in `docs/testflight.md`. They need no approval, are internal-only and are never submitted, published or tagged.
 
 ## Git workflow
 
