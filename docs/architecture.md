@@ -148,5 +148,7 @@ and `Sendable`.
   Interface code elsewhere is SwiftUI.
 - New logic that can be expressed without UIKit goes into the package, with tests. PencilKit does
   not run in the package's tests; code that handles strokes there is generic over `InkStroke`.
+- Behaviour that depends on PencilKit or UIKit, such as how strokes are split or how the canvas
+  reports and zooms, is covered by the app tests in `AppTests`.
 - The model never knows about files, and storage never knows about views.
 - Persisted formats change only by the rules in [storage.md](storage.md).

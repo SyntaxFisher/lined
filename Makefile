@@ -15,12 +15,12 @@ XCODEBUILD = xcodebuild -project Lined.xcodeproj -scheme Lined \
 	-derivedDataPath $(DERIVED_DATA) -quiet
 
 .DEFAULT_GOAL := help
-.PHONY: help project simulator build test run clean
+.PHONY: help project simulator build test test-app run clean
 
 help: ## List the commands
-	@awk 'BEGIN { FS = ":.*## " } /^[a-z-]+:.*## / { printf "make %-8s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+	@awk 'BEGIN { FS = ":.*## " } /^[a-z-]+:.*## / { printf "make %-9s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 	@echo
-	@echo "SIMULATOR selects the simulator for build and run, by name or identifier."
+	@echo "SIMULATOR selects the simulator for build, test-app and run, by name or identifier."
 	@echo "It defaults to \"$(SIMULATOR)\"."
 
 project: ## Generate Lined.xcodeproj from project.yml
@@ -35,6 +35,9 @@ build: project simulator ## Build the app for the simulator
 test: ## Run the unit tests of LinedKit and the scripts on this Mac
 	swift test --package-path Packages/LinedKit
 	python3 -m unittest discover --start-directory scripts/tests --quiet
+
+test-app: project simulator ## Run the app's tests in the simulator, with PencilKit and UIKit
+	$(XCODEBUILD) test
 
 run: build ## Build, install and launch the app in the simulator
 	xcrun simctl boot $(SIMULATOR_ID) 2>/dev/null || true

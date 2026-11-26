@@ -26,6 +26,22 @@ targets:
         product: LinedLayout
       - package: LinedKit
         product: LinedInk
+  LinedTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - AppTests
+    configFiles:
+      Debug: Config/LinedTests.xcconfig
+      Release: Config/LinedTests.xcconfig
+    dependencies:
+      - target: Lined
+      - package: LinedKit
+        product: LinedModel
+      - package: LinedKit
+        product: LinedLayout
+      - package: LinedKit
+        product: LinedInk
 schemes:
   Lined:
     build:
@@ -33,3 +49,7 @@ schemes:
         Lined: all
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - LinedTests

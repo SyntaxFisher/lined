@@ -7,6 +7,7 @@
 ## Commands
 
 - `make test` runs the unit tests of the `LinedKit` package and of the scripts on the Mac.
+- `make test-app` runs the app's tests with PencilKit and UIKit in the simulator.
 - `make build` generates `Lined.xcodeproj` from `project.yml` with XcodeGen and builds for the iPad simulator.
 - `make run` builds, installs and launches the app in the simulator. `SIMULATOR` selects it by name or identifier.
 - The project file is generated and ignored by Git. Run `make project` after adding, moving or removing files.
@@ -19,7 +20,7 @@
 - `LibraryModel` is the only place that changes the library, `NotebookSession` the only place that changes an open notebook.
 - Page content is stored per page and keyed by page identifier, in page points with the origin at the top left. New kinds of content become new files in the notebook package.
 - Saved formats are versioned. Follow the rules in `docs/storage.md` when changing them.
-- Verify interface changes in an iPad simulator, where finger drawing stands in for Apple Pencil.
+- Verify interface changes in an iPad simulator, where finger drawing stands in for Apple Pencil, in both light and dark mode.
 
 ## Releases
 

@@ -1,0 +1,8 @@
+// Build settings of the app's tests, which run inside the app in the simulator.
+
+PRODUCT_BUNDLE_IDENTIFIER = com.example.lined.tests
+TARGETED_DEVICE_FAMILY = 2
+SWIFT_VERSION = 6.0
+SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor
+SWIFT_APPROACHABLE_CONCURRENCY = YES
+GENERATE_INFOPLIST_FILE = YES

@@ -10,6 +10,7 @@
 ```sh
 make            # list the commands
 make test       # unit tests of the LinedKit package and the scripts, on the Mac
+make test-app   # tests of the app with PencilKit and UIKit, in the simulator
 make build      # generate the project and build for the simulator
 make run        # build, install and launch in the simulator
 ```
@@ -34,6 +35,7 @@ DEVELOPMENT_TEAM = ABCDE12345
 
 ```
 App/                 the app target: SwiftUI interface and the UIKit canvas
+AppTests/            tests of the app target, run in the simulator
 Packages/LinedKit/   model, storage, rendering, layout and ink bookkeeping, with tests
 Config/              build settings
 scripts/             release tooling, with tests
@@ -52,6 +54,11 @@ bookkeeping of ink and undo steps.
 Logic belongs in the package so that it can be tested this way; the app target holds interface and
 wiring.
 
-Interface changes are checked in the simulator. Finger drawing is on by default there, since the
-simulator has no Apple Pencil: one finger draws and two fingers scroll and zoom. On a device the
-default is Apple Pencil only.
+The app tests run in the simulator with Swift Testing, hosted by the app, so they use the real
+PencilKit and UIKit: how strokes are split at the edge of a page, what the canvas reports to the
+notebook, and how the paper follows the ink when a zoom springs back. Run them with `make test-app`
+before handing out a build.
+
+Interface changes are checked in the simulator, in light and dark mode. Finger drawing is on by
+default there, since the simulator has no Apple Pencil: one finger draws and two fingers scroll and
+zoom. On a device the default is Apple Pencil only.
