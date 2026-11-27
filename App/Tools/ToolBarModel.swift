@@ -37,13 +37,13 @@ final class ToolBarModel {
         edge = defaults.string(forKey: Preference.toolBarEdge).flatMap(DockEdge.init) ?? .bottom
     }
 
-    /// Selects a tool. A tap on the tool that is already selected shows or hides its options.
+    /// Selects a tool and shows its options. A tap on the tool that is already selected shows or hides them.
     func tap(_ tool: DrawingTool) {
         if tool == settings.tool {
             isShowingOptions = tool.hasOptions && !isShowingOptions
         } else {
             settings.select(tool)
-            isShowingOptions = isShowingOptions && tool.hasOptions
+            isShowingOptions = tool.hasOptions
         }
     }
 
