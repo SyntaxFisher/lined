@@ -172,7 +172,7 @@ extension DrawingTool {
 
     var symbolName: String {
         switch self {
-        case .pen: "pencil.tip"
+        case .pen: "scribble.variable"
         case .eraser: "eraser"
         case .lasso: "lasso"
         }
