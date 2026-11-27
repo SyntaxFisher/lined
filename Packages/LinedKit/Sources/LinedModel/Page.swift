@@ -93,6 +93,13 @@ public struct Page: Identifiable, Equatable, Codable, Sendable {
         self.background = background
     }
 
+    /// One page per page of a PDF, in the PDF's order.
+    public static func pages(of source: PDFSource.ID, sizes: [PageSize]) -> [Page] {
+        sizes.enumerated().map { index, size in
+            Page(size: size, background: .pdf(source: source, pageIndex: index))
+        }
+    }
+
     /// A new page to follow this one: same size, on the given paper or else on this page's paper.
     /// PDF pages are followed by blank paper.
     public func successor(template: PaperTemplate? = nil) -> Page {

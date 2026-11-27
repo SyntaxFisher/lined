@@ -63,6 +63,19 @@ public struct NotebookPackage: Equatable, Sendable {
         sourcesDirectory.appending(path: "\(id).pdf", directoryHint: .notDirectory)
     }
 
+    /// Copies a PDF into the package under a new identifier. The copy appears under its final name
+    /// only once it is complete. Until a page refers to it, housekeeping may remove it again.
+    public func addPDFSource(copying url: URL) throws -> PDFSource.ID {
+        let id = PDFSource.ID()
+        let fileManager = FileManager.default
+        try fileManager.createDirectory(at: sourcesDirectory, withIntermediateDirectories: true)
+        let partial = sourcesDirectory.appending(path: "\(id).partial", directoryHint: .notDirectory)
+        defer { try? fileManager.removeItem(at: partial) }
+        try fileManager.copyItem(at: url, to: partial)
+        try fileManager.moveItem(at: partial, to: pdfSourceURL(id))
+        return id
+    }
+
     // MARK: View state
 
     /// The stored reading position, or the default when none was stored or it cannot be read.

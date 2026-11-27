@@ -17,13 +17,15 @@ final class NotebookSession: NotebookHistory {
     /// Counts the changes to each page's ink, so that pictures of a page know when they are outdated.
     private(set) var inkRevisions: [Page.ID: Int] = [:]
     var failureMessage: String?
+    var importFailureMessage: String?
+    private(set) var isImporting = false
 
     /// Passes the system's undo gestures and keyboard shortcuts on to the notebook's history.
     @ObservationIgnored let undoManager = NotebookUndoManager()
 
     @ObservationIgnored private let files: NotebookFiles
     @ObservationIgnored private let ink: PageInkStore
-    @ObservationIgnored private let pdfSources: [PDFSource.ID: PDFDocumentSource]
+    @ObservationIgnored private var pdfSources: [PDFSource.ID: PDFDocumentSource]
     @ObservationIgnored private let onContentChange: () -> Void
     @ObservationIgnored private let thumbnails = NSCache<NSString, CGImage>()
     @ObservationIgnored private weak var canvas: (any PagedCanvasControlling)?
@@ -99,13 +101,56 @@ final class NotebookSession: NotebookHistory {
 
     // MARK: Pages
 
-    /// Adds a page after the current one, on the given paper or else on the current page's paper.
-    func addPage(template: PaperTemplate? = nil) async {
-        let page = currentPage.successor(template: template)
+    /// Where new pages go.
+    enum PagePlacement {
+        case afterCurrentPage
+        case atEnd
+    }
+
+    /// The page that new pages at `placement` follow, whose size a new page of paper takes.
+    func pageBefore(_ placement: PagePlacement) -> Page {
+        switch placement {
+        case .afterCurrentPage: currentPage
+        case .atEnd: pages[pages.count - 1]
+        }
+    }
+
+    private func insertionIndex(for placement: PagePlacement) -> Int {
+        switch placement {
+        case .afterCurrentPage: min(currentPageIndex, pages.count - 1) + 1
+        case .atEnd: pages.count
+        }
+    }
+
+    /// Adds a page of paper, on the given paper or else on that of the page before it.
+    func addPage(template: PaperTemplate? = nil, placement: PagePlacement = .afterCurrentPage) async {
+        let page = pageBefore(placement).successor(template: template)
         var updated = document
-        updated.insert(page, at: min(currentPageIndex, pages.count - 1) + 1)
+        updated.insert(page, at: insertionIndex(for: placement))
         await apply(updated)
         canvas?.scroll(to: page.id, animated: true)
+    }
+
+    /// Inserts the pages of each PDF, in the order the PDFs are given, and shows the first of them.
+    /// A PDF that cannot be imported is reported and left out.
+    func importPDFs(from urls: [URL], placement: PagePlacement = .afterCurrentPage) async {
+        isImporting = true
+        defer { isImporting = false }
+        var imported: [Page] = []
+        for url in urls {
+            do {
+                let (id, source, sizes) = try await files.importPDF(from: url)
+                pdfSources[id] = source
+                imported += Page.pages(of: id, sizes: sizes)
+            } catch {
+                importFailureMessage = ErrorMessage.text(for: error)
+            }
+        }
+        guard let first = imported.first else { return }
+        var updated = document
+        updated.insert(imported, at: insertionIndex(for: placement))
+        await apply(updated)
+        canvas?.scroll(to: first.id, animated: true)
     }
 
     func deletePage(_ pageID: Page.ID) async {

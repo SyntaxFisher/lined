@@ -41,6 +41,19 @@ actor NotebookFiles {
         return sources
     }
 
+    /// Copies a PDF the user picked into the notebook and opens the copy. A PDF that cannot be shown
+    /// is refused before anything is copied.
+    func importPDF(from url: URL) throws -> (id: PDFSource.ID, source: PDFDocumentSource, pageSizes: [PageSize]) {
+        let isSecurityScoped = url.startAccessingSecurityScopedResource()
+        defer {
+            if isSecurityScoped { url.stopAccessingSecurityScopedResource() }
+        }
+        _ = try PDFDocumentSource(url: url)
+        let id = try package.addPDFSource(copying: url)
+        let source = try PDFDocumentSource(url: package.pdfSourceURL(id))
+        return (id, source, source.pageSizes)
+    }
+
     /// The page's stored ink, or an empty drawing when the page has none. A drawing that cannot be
     /// decoded is moved aside rather than overwritten by the next save.
     func loadDrawing(for pageID: Page.ID) -> PKDrawing {

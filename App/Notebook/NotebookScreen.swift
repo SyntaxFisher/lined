@@ -81,6 +81,18 @@ private struct NotebookEditor: View {
             .sheet(isPresented: $isShowingPages) {
                 PageOverview(session: session)
             }
+            .overlay {
+                if session.isImporting {
+                    ProgressView("Importing…")
+                        .padding(24)
+                        .background(.regularMaterial, in: .rect(cornerRadius: 16))
+                }
+            }
+            .alert("The PDF could not be imported", isPresented: $session.importFailureMessage.isPresent) {
+                Button("OK") {}
+            } message: {
+                Text(session.importFailureMessage ?? "")
+            }
             .alert("Your changes could not be saved", isPresented: $session.failureMessage.isPresent) {
                 Button("OK") {}
             } message: {
@@ -124,19 +136,39 @@ private struct NotebookEditor: View {
     }
 }
 
-/// Adds a page after the current one: a tap continues the current paper, the menu offers the others.
-struct AddPageMenu: View {
+/// Adds pages: a page of paper, or the pages of a PDF.
+struct AddPageMenu<Label: View>: View {
     let session: NotebookSession
+    var placement = NotebookSession.PagePlacement.afterCurrentPage
+    @ViewBuilder let label: Label
+
+    @State private var isChoosingPDF = false
 
     var body: some View {
-        Menu("Add Page", systemImage: "plus.rectangle.portrait") {
+        Menu {
             ForEach(PaperTemplate.allCases, id: \.self) { template in
                 Button(template.displayName, systemImage: template.symbolName) {
-                    Task { await session.addPage(template: template) }
+                    Task { await session.addPage(template: template, placement: placement) }
                 }
             }
-        } primaryAction: {
-            Task { await session.addPage() }
+            Divider()
+            Button("Import PDF…", systemImage: "arrow.down.doc") { isChoosingPDF = true }
+        } label: {
+            label
+        }
+        .fileImporter(isPresented: $isChoosingPDF, allowedContentTypes: [.pdf], allowsMultipleSelection: true) { result in
+            if case .success(let urls) = result {
+                Task { await session.importPDFs(from: urls, placement: placement) }
+            }
+        }
+    }
+}
+
+extension AddPageMenu where Label == SwiftUI.Label<Text, Image> {
+    /// The tool bar button, which adds pages after the current one.
+    init(session: NotebookSession) {
+        self.init(session: session) {
+            SwiftUI.Label("Add Page", systemImage: "plus.rectangle.portrait")
         }
     }
 }

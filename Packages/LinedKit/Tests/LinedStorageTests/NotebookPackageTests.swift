@@ -37,6 +37,21 @@ struct NotebookPackageTests {
         #expect(FileManager.default.itemExists(at: original))
     }
 
+    @Test func addsPDFsToAnExistingPackage() throws {
+        let original = directory.file("slides.pdf")
+        try Data("%PDF-slides".utf8).write(to: original)
+        let package = try store.createPackage(for: Notebook.ID(), document: .paper(.lined, size: a4))
+
+        let first = try package.addPDFSource(copying: original)
+        let second = try package.addPDFSource(copying: original)
+
+        #expect(first != second)
+        #expect(try Data(contentsOf: package.pdfSourceURL(second)) == Data("%PDF-slides".utf8))
+        let sources = try FileManager.default.contentsOfDirectory(atPath: package.pdfSourceURL(first).deletingLastPathComponent().path)
+        #expect(Set(sources) == ["\(first).pdf", "\(second).pdf"])
+        #expect(throws: (any Error).self) { try package.addPDFSource(copying: directory.file("missing.pdf")) }
+    }
+
     @Test func aFailedCreationLeavesNoPackageBehind() throws {
         let source = PDFSource.ID()
         let document = try #require(NotebookDocument.pdf(source: source, pageSizes: [a4]))

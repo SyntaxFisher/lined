@@ -21,9 +21,7 @@ public struct NotebookDocument: Equatable, Sendable {
 
     /// One page per PDF page, in the PDF's order. Returns `nil` for a PDF without pages.
     public static func pdf(source: PDFSource.ID, pageSizes: [PageSize]) -> NotebookDocument? {
-        NotebookDocument(pages: pageSizes.enumerated().map { index, size in
-            Page(size: size, background: .pdf(source: source, pageIndex: index))
-        })
+        NotebookDocument(pages: Page.pages(of: source, sizes: pageSizes))
     }
 
     private init(first page: Page) {
@@ -42,7 +40,12 @@ public struct NotebookDocument: Equatable, Sendable {
 
     /// Inserts the page at `index`, clamped to the valid range.
     public mutating func insert(_ page: Page, at index: Int) {
-        pages.insert(page, at: min(max(index, 0), pages.count))
+        insert([page], at: index)
+    }
+
+    /// Inserts the pages in their order at `index`, clamped to the valid range.
+    public mutating func insert(_ newPages: [Page], at index: Int) {
+        pages.insert(contentsOf: newPages, at: min(max(index, 0), pages.count))
     }
 
     @discardableResult

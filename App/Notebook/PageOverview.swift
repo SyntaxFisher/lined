@@ -1,7 +1,7 @@
 import LinedModel
 import SwiftUI
 
-/// All pages of a notebook as thumbnails, for jumping to a page and removing pages.
+/// All pages of a notebook as thumbnails, for jumping to a page, removing pages and adding pages at the end.
 struct PageOverview: View {
     let session: NotebookSession
 
@@ -35,24 +35,59 @@ struct PageOverview: View {
                             }
                             .id(page.id)
                         }
+                        AddPageMenu(session: session, placement: .atEnd) {
+                            NewPageCell(pageSize: session.pageBefore(.atEnd).successor().size)
+                        }
+                        .buttonStyle(.plain)
+                        .id(Self.newPageID)
                     }
                     .padding(24)
                 }
                 .onAppear {
                     proxy.scrollTo(session.currentPage.id, anchor: .center)
                 }
+                .onChange(of: session.pages.count) {
+                    withAnimation { proxy.scrollTo(Self.newPageID, anchor: .bottom) }
+                }
             }
             .navigationTitle("Pages")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    AddPageMenu(session: session)
-                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
             }
         }
+    }
+}
+
+private extension PageOverview {
+    static let newPageID = "new-page"
+}
+
+/// An outline of the page that would come next, in its size, offering to add it.
+private struct NewPageCell: View {
+    let pageSize: PageSize
+
+    var body: some View {
+        VStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: PagePicture.cornerRadius * 2)
+                .strokeBorder(.tint, style: StrokeStyle(lineWidth: 2, dash: [7, 6]))
+                .overlay {
+                    Image(systemName: "plus")
+                        .font(.title2.weight(.medium))
+                        .foregroundStyle(.tint)
+                }
+                .aspectRatio(pageSize.width / pageSize.height, contentMode: .fit)
+                .frame(height: 190)
+            // Keeps the outline level with the pages, which carry their number below.
+            Text(verbatim: " ")
+                .font(.footnote)
+        }
+        .contentShape(.rect)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Add Page")
+        .accessibilityAddTraits(.isButton)
     }
 }
 

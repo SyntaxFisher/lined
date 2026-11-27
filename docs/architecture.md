@@ -31,8 +31,9 @@ The app target is split by feature:
 ## Document model
 
 A notebook is an ordered list of pages. A page has an identifier, a size in points and a background:
-either a paper template or one page of an imported PDF. All positions on a page are in page points
-with the origin at the top left.
+either a paper template or one page of an imported PDF. Paper pages are A4; PDF pages keep the
+size of their PDF page, also when a PDF is imported into an existing notebook. All positions on a
+page are in page points with the origin at the top left.
 
 Everything that belongs to a page is stored and addressed by the page's identifier, not by its
 position. Ink is the first such layer. Further layers, such as recognised text or AI annotations

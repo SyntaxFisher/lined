@@ -37,6 +37,21 @@ struct NotebookDocumentTests {
         #expect(document.index(of: appended.id) == 2)
     }
 
+    @Test func insertsThePagesOfAPDFInTheirOrder() {
+        var document = NotebookDocument.paper(.blank, size: PageSize.a4(.portrait))
+        let first = document.pages[0]
+        document.insert(first.successor(), at: 1)
+        let source = PDFSource.ID()
+        let imported = Page.pages(of: source, sizes: [PageSize(width: 400, height: 600), PageSize(width: 600, height: 400)])
+
+        document.insert(imported, at: 1)
+
+        #expect(document.pages.map(\.id) == [first.id, imported[0].id, imported[1].id, document.pages[3].id])
+        #expect(document.pages[1...2].map(\.background) == [.pdf(source: source, pageIndex: 0), .pdf(source: source, pageIndex: 1)])
+        #expect(document.pages[2].size == PageSize(width: 600, height: 400))
+        #expect(document.referencedPDFSources == [source])
+    }
+
     @Test func keepsAtLeastOnePage() throws {
         var document = NotebookDocument.paper(.blank, size: PageSize.a4(.portrait))
         let first = document.pages[0]
