@@ -67,13 +67,10 @@ struct PencilKitInkTests {
     /// A width outside PencilKit's range would be drawn like its neighbour.
     @Test func everyWidthIsOneThatPencilKitDraws() throws {
         var settings = ToolSettings()
-        for style in ToolSettings.PenStyle.allCases {
-            settings.penStyle = style
-            for width in StrokeWidth.allCases {
-                settings.penWidth = width
-                let drawnWidth = CGFloat(settings.penLineWidth) * PagedCanvasView.documentScale
-                #expect(settings.penInkType.validWidthRange.contains(drawnWidth), "\(style) \(width)")
-            }
+        for width in StrokeWidth.allCases {
+            settings.penWidth = width
+            let drawnWidth = CGFloat(settings.penLineWidth) * PagedCanvasView.documentScale
+            #expect(PKInkingTool.InkType.monoline.validWidthRange.contains(drawnWidth), "\(width)")
         }
         for width in StrokeWidth.allCases {
             settings.highlighterWidth = width

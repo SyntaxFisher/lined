@@ -46,7 +46,7 @@ mixed up.
 `PagedCanvasView` shows the pages as one vertical stack. A single `PKCanvasView` is the scroll view
 of the whole notebook, so scrolling, zooming and ink rendering are PencilKit's own and behave like
 they do in every other app. The canvas draws in document points: page points magnified twice and
-offset by the place of the page in the stack. PencilKit draws no pen line thinner than 0.88 of its
+offset by the place of the page in the stack. PencilKit draws no even line thinner than 0.5 of its
 points, so the magnification lets the finest pen draw lines of half that width on the page. Tool
 widths are set in page points and doubled for PencilKit. Its zoom scale is the number of screen
 points per document point, and it ends at ten, which is as far as PencilKit magnifies a canvas.

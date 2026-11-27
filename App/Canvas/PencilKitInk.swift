@@ -98,8 +98,11 @@ extension ToolSettings {
     func pencilKitTool(documentScale: CGFloat) -> any PKTool {
         switch tool {
         case .pen:
-            let ink = penInkType
-            return PKInkingTool(ink, color: penColor.uiColor, width: ink.validWidthRange.clamping(penLineWidth * documentScale))
+            return PKInkingTool(
+                .monoline,
+                color: penColor.uiColor,
+                width: PKInkingTool.InkType.monoline.validWidthRange.clamping(penLineWidth * documentScale)
+            )
         case .highlighter:
             return PKInkingTool(
                 .marker,
@@ -115,8 +118,6 @@ extension ToolSettings {
             return PKLassoTool()
         }
     }
-
-    var penInkType: PKInkingTool.InkType { penStyle == .pen ? .pen : .monoline }
 }
 
 extension InkColor {

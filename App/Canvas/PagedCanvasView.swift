@@ -94,7 +94,7 @@ final class PagedCanvasView: UIView {
 
     private static let deskColor = UIColor.secondarySystemBackground
 
-    /// Document points per page point. PencilKit draws no pen line thinner than 0.88 of its points,
+    /// Document points per page point. PencilKit draws no even line thinner than 0.5 of its points,
     /// so the canvas draws pages at twice their size to allow lines half as thin on the page.
     static let documentScale: CGFloat = 2
 

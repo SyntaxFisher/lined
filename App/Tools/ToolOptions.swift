@@ -15,8 +15,6 @@ struct ToolOptions: View {
                 ColorChoices(colors: InkColor.penPalette, selection: $settings.penColor, isColumn: isColumn)
                 ToolBarSeparator(isAcross: isColumn)
                 WidthChoices(selection: $settings.penWidth, color: Color(settings.penColor), isColumn: isColumn)
-                ToolBarSeparator(isAcross: isColumn)
-                choices(ToolSettings.PenStyle.allCases, selection: $settings.penStyle)
             case .highlighter:
                 ColorChoices(colors: InkColor.highlighterPalette, selection: $settings.highlighterColor, isColumn: isColumn)
                 ToolBarSeparator(isAcross: isColumn)
@@ -61,22 +59,6 @@ struct ToolOptions: View {
                 .accessibilityLabel(choice.displayName)
                 .accessibilityInputLabels([choice.title])
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
-            }
-        }
-    }
-
-    private func choices<Choice: ToolChoice>(_ all: [Choice], selection: Binding<Choice>) -> some View {
-        let stack = isColumn ? AnyLayout(VStackLayout(spacing: 4)) : AnyLayout(HStackLayout(spacing: 4))
-        return stack {
-            ForEach(all, id: \.self) { choice in
-                Button {
-                    selection.wrappedValue = choice
-                } label: {
-                    ToolBarIcon(systemName: choice.symbolName, isSelected: choice == selection.wrappedValue, diameter: 36)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(choice.displayName)
-                .accessibilityAddTraits(choice == selection.wrappedValue ? .isSelected : [])
             }
         }
     }
@@ -160,28 +142,6 @@ private struct InkDot: View {
         Circle()
             .fill(color)
             .strokeBorder(.primary.opacity(0.25), lineWidth: 1)
-    }
-}
-
-/// A choice the tool bar offers as a round icon.
-private protocol ToolChoice: Hashable {
-    var symbolName: String { get }
-    var displayName: LocalizedStringKey { get }
-}
-
-extension ToolSettings.PenStyle: ToolChoice {
-    fileprivate var symbolName: String {
-        switch self {
-        case .pen: "scribble.variable"
-        case .fineliner: "scribble"
-        }
-    }
-
-    fileprivate var displayName: LocalizedStringKey {
-        switch self {
-        case .pen: "Pen that follows pressure"
-        case .fineliner: "Fineliner with an even line"
-        }
     }
 }
 

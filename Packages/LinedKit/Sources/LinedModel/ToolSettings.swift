@@ -46,13 +46,6 @@ public enum StrokeWidth: String, Codable, CaseIterable, Sendable {
 
 /// The tool in use and how each tool is set up.
 public struct ToolSettings: Codable, Equatable, Sendable {
-    public enum PenStyle: String, Codable, CaseIterable, Sendable {
-        /// A line that grows with pressure.
-        case pen
-        /// A line of even width.
-        case fineliner
-    }
-
     public enum EraserMode: String, Codable, CaseIterable, Sendable {
         /// Removes every stroke it touches.
         case stroke
@@ -65,7 +58,6 @@ public struct ToolSettings: Codable, Equatable, Sendable {
 
     public var penColor = InkColor.black
     public var penWidth = StrokeWidth.medium
-    public var penStyle = PenStyle.pen
     public var highlighterColor = InkColor.yellow
     public var highlighterWidth = StrokeWidth.medium
     public var eraserMode = EraserMode.stroke
@@ -102,15 +94,12 @@ public struct ToolSettings: Codable, Equatable, Sendable {
         previousTool == .eraser ? .pen : previousTool
     }
 
-    /// The pen's line width in page points. Each width is about 1.6 times the one below it.
+    /// The width of the pen's even line in page points. Each width is about 1.6 times the one below it.
     public var penLineWidth: Double {
-        switch (penStyle, penWidth) {
-        case (.pen, .fine): 0.55
-        case (.pen, .medium): 0.88
-        case (.pen, .bold): 1.4
-        case (.fineliner, .fine): 0.31
-        case (.fineliner, .medium): 0.5
-        case (.fineliner, .bold): 0.8
+        switch penWidth {
+        case .fine: 0.31
+        case .medium: 0.5
+        case .bold: 0.8
         }
     }
 

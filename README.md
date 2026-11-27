@@ -11,7 +11,7 @@ Lined is in early development and not available yet.
 - A4 notebooks on blank, lined, squared or dotted paper, and notebooks made from imported PDFs.
 - Pages added after the current one or at the end of the page overview, on any paper or from a PDF.
 - Handwriting with Apple Pencil on every page, sharp at any zoom, saved as you write.
-- A pen, a highlighter, an eraser and a lasso in a tool bar that docks to any edge of the screen.
+- A fineliner pen, a highlighter, an eraser and a lasso in a tool bar that docks to any edge of the screen.
 
 ## Planned features
 

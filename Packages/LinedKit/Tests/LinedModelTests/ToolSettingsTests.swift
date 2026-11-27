@@ -65,14 +65,11 @@ struct ToolSettingsTests {
 
     @Test func widthsGrowFromFineToBold() {
         var settings = ToolSettings()
-        for style in ToolSettings.PenStyle.allCases {
-            settings.penStyle = style
-            let widths = StrokeWidth.allCases.map { width in
-                settings.penWidth = width
-                return settings.penLineWidth
-            }
-            #expect(widths == widths.sorted() && Set(widths).count == widths.count)
+        let penWidths = StrokeWidth.allCases.map { width in
+            settings.penWidth = width
+            return settings.penLineWidth
         }
+        #expect(penWidths == penWidths.sorted() && Set(penWidths).count == penWidths.count)
         let highlighterWidths = StrokeWidth.allCases.map { width in
             settings.highlighterWidth = width
             return settings.highlighterLineWidth
@@ -97,7 +94,7 @@ struct ToolSettingsTests {
         var settings = ToolSettings()
         settings.select(.highlighter)
         settings.penColor = .blue
-        settings.penStyle = .fineliner
+        settings.penWidth = .bold
         settings.highlighterWidth = .bold
         settings.eraserMode = .precise
         settings.returnsAfterErasing = false

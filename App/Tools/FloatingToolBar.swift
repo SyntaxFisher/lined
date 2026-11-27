@@ -120,13 +120,12 @@ private struct ToolButtons: View {
 struct ToolBarIcon: View {
     let systemName: String
     let isSelected: Bool
-    var diameter: CGFloat = 44
 
     var body: some View {
         Image(systemName: systemName)
-            .font(.system(size: diameter * 0.42, weight: .medium))
+            .font(.system(size: 18.5, weight: .medium))
             .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
-            .frame(width: diameter, height: diameter)
+            .frame(width: 44, height: 44)
             .background(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear), in: .circle)
             .contentShape(.circle)
     }
