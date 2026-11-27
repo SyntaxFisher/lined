@@ -98,7 +98,7 @@ private struct ToolButtons: View {
                 } label: {
                     ToolBarIcon(systemName: tool.symbolName, isSelected: tool == model.settings.tool)
                         .overlay(alignment: .bottom) {
-                            if tool == .pen {
+                            if tool == .pen, model.settings.tool == .pen {
                                 Capsule()
                                     .fill(Color(model.settings.penColor))
                                     .strokeBorder(.white.opacity(0.9), lineWidth: 1)
