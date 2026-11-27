@@ -102,12 +102,16 @@ public struct ToolSettings: Codable, Equatable, Sendable {
         previousTool == .eraser ? .pen : previousTool
     }
 
-    /// The pen's line width in page points. Each width is about 1.6 times the one below it.
+    /// The pen's line width in page points.
+    ///
+    /// The fineliner draws its width as it is set, and each of its widths is 1.6 times the one below.
+    /// The pen's line follows the pressure and grows less than its width, so its widths double
+    /// to look as far apart. Its fine width is the thinnest line the canvas draws.
     public var penLineWidth: Double {
         switch (penStyle, penWidth) {
-        case (.pen, .fine): 0.55
+        case (.pen, .fine): 0.44
         case (.pen, .medium): 0.88
-        case (.pen, .bold): 1.4
+        case (.pen, .bold): 1.76
         case (.fineliner, .fine): 0.31
         case (.fineliner, .medium): 0.5
         case (.fineliner, .bold): 0.8
