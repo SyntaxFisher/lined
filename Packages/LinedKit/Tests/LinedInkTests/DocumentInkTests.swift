@@ -16,6 +16,15 @@ struct DocumentInkTests {
         #expect(document == [TestStroke(frame.minX + 5, frame.minY + 7)])
     }
 
+    @Test func magnifiesPageInkByTheScaleOfTheLayout() {
+        let scaled = PageStackLayout(pageSizes: [CGSize(width: 600, height: 800)], metrics: .init(margin: 10, spacing: 20), scale: 2)
+
+        let document = DocumentInk.strokes(joining: [0: [TestStroke(5, 7, reach: CGVector(dx: 10, dy: 0))]], layout: scaled)
+
+        #expect(document == [TestStroke(30, 34, reach: CGVector(dx: 20, dy: 0))])
+        #expect(DocumentInk.pageInk(in: document, layout: scaled) == [0: [TestStroke(5, 7, reach: CGVector(dx: 10, dy: 0))]])
+    }
+
     @Test func returnsEveryPageItsOwnInkInPagePoints() {
         let pages = [0: [TestStroke(10, 20)], 2: [TestStroke(1, 2), TestStroke(500, 700)]]
 
@@ -82,12 +91,14 @@ struct InkFingerprintTests {
     private let layout = PageStackLayout(pageSizes: [CGSize](repeating: CGSize(width: 595, height: 842), count: 40))
     private let ink = [TestStroke(12.3, 45.6), TestStroke(0.1, 0.2)]
 
-    @Test func isTheSameInPageAndInDocumentCoordinates() {
+    @Test(arguments: [1, 2] as [CGFloat])
+    func isTheSameInPageAndInDocumentCoordinates(scale: CGFloat) {
+        let layout = PageStackLayout(pageSizes: [CGSize](repeating: CGSize(width: 595, height: 842), count: 40), scale: scale)
+        let ink = [TestStroke(12.3, 45.6, reach: CGVector(dx: 7.1, dy: -3.3)), TestStroke(0.1, 0.2)]
         for index in [0, 1, 17, 39] {
             let document = DocumentInk.strokes(joining: [index: ink], layout: layout)
-            let origin = layout.frame(ofPageAt: index).origin
 
-            #expect(InkFingerprint(of: document, relativeTo: origin) == InkFingerprint(of: ink))
+            #expect(InkFingerprint(of: document, onPage: layout.transform(ofPageAt: index)) == InkFingerprint(of: ink))
             #expect(InkFingerprint(of: DocumentInk.lifted(document, fromPageAt: index, layout: layout)) == InkFingerprint(of: ink))
         }
     }

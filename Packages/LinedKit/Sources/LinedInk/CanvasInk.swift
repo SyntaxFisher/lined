@@ -77,7 +77,7 @@ public struct CanvasInk<PageID: Hashable, Stroke: InkStroke> {
             }
             let before = entry.strokes
             entry.strokes += DocumentInk.lifted(onPage, fromPageAt: index, layout: layout)
-            entry.fingerprint.add(onPage, relativeTo: layout.frame(ofPageAt: index).origin)
+            entry.fingerprint.add(onPage, onPage: layout.transform(ofPageAt: index))
             entries[pageID] = entry
             comparison.changes.append(InkChange(pageID: pageID, before: before, after: entry.strokes))
         }
@@ -99,7 +99,7 @@ public struct CanvasInk<PageID: Hashable, Stroke: InkStroke> {
         for (pageID, entry) in entries {
             guard let index = indexByPageID[pageID] else { continue }
             let onPage = current[index] ?? []
-            let fingerprint = InkFingerprint(of: onPage, relativeTo: layout.frame(ofPageAt: index).origin)
+            let fingerprint = InkFingerprint(of: onPage, onPage: layout.transform(ofPageAt: index))
             guard fingerprint != entry.fingerprint else { continue }
             let ink = DocumentInk.lifted(onPage, fromPageAt: index, layout: layout)
             changes.append((index, InkChange(pageID: pageID, before: entry.strokes, after: ink)))

@@ -36,11 +36,17 @@ struct TestStroke: InkStroke, Equatable {
             .union(CGRect(x: origin.x + reach.dx, y: origin.y + reach.dy, width: 0, height: 0))
     }
 
-    func moved(by offset: CGVector) -> TestStroke {
+    func applying(_ transform: CGAffineTransform) -> TestStroke {
         var stroke = self
-        stroke.origin = CGPoint(x: origin.x + offset.dx, y: origin.y + offset.dy)
-        stroke.clip = clip?.offsetBy(dx: offset.dx, dy: offset.dy)
+        stroke.origin = origin.applying(transform)
+        let end = CGPoint(x: origin.x + reach.dx, y: origin.y + reach.dy).applying(transform)
+        stroke.reach = CGVector(dx: end.x - stroke.origin.x, dy: end.y - stroke.origin.y)
+        stroke.clip = clip?.applying(transform)
         return stroke
+    }
+
+    func moved(by offset: CGVector) -> TestStroke {
+        applying(CGAffineTransform(translationX: offset.dx, y: offset.dy))
     }
 
     func clipped(to rect: CGRect) -> TestStroke? {
@@ -51,13 +57,14 @@ struct TestStroke: InkStroke, Equatable {
         return stroke
     }
 
-    func fingerprint(into hasher: inout Hasher, relativeTo origin: CGPoint) {
-        InkFingerprint.combine(self.origin, relativeTo: origin, into: &hasher)
+    func fingerprint(into hasher: inout Hasher, onPage page: CGAffineTransform) {
+        let onPage = applying(page.inverted())
+        InkFingerprint.combine(onPage.origin, into: &hasher)
+        InkFingerprint.combine(CGPoint(x: onPage.reach.dx, y: onPage.reach.dy), into: &hasher)
         hasher.combine(colour)
-        if let clip {
-            InkFingerprint.combine(clip.origin, relativeTo: origin, into: &hasher)
-            hasher.combine(clip.width)
-            hasher.combine(clip.height)
+        if let clip = onPage.clip {
+            InkFingerprint.combine(clip.origin, into: &hasher)
+            InkFingerprint.combine(CGPoint(x: clip.width, y: clip.height), into: &hasher)
         }
     }
 }

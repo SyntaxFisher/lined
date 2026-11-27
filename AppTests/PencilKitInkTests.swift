@@ -71,13 +71,14 @@ struct PencilKitInkTests {
             settings.penStyle = style
             for width in StrokeWidth.allCases {
                 settings.penWidth = width
-                let ink: PKInkingTool.InkType = style == .pen ? .pen : .monoline
-                #expect(ink.validWidthRange.contains(CGFloat(settings.penLineWidth)), "\(style) \(width)")
+                let drawnWidth = CGFloat(settings.penLineWidth) * PagedCanvasView.documentScale
+                #expect(settings.penInkType.validWidthRange.contains(drawnWidth), "\(style) \(width)")
             }
         }
         for width in StrokeWidth.allCases {
             settings.highlighterWidth = width
-            #expect(PKInkingTool.InkType.marker.validWidthRange.contains(CGFloat(settings.highlighterLineWidth)), "\(width)")
+            let drawnWidth = CGFloat(settings.highlighterLineWidth) * PagedCanvasView.documentScale
+            #expect(PKInkingTool.InkType.marker.validWidthRange.contains(drawnWidth), "\(width)")
         }
     }
 

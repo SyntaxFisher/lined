@@ -94,6 +94,10 @@ final class PagedCanvasView: UIView {
 
     private static let deskColor = UIColor.secondarySystemBackground
 
+    /// Document points per page point. PencilKit draws no pen line thinner than 0.88 of its points,
+    /// so the canvas draws pages at twice their size to allow lines half as thin on the page.
+    static let documentScale: CGFloat = 2
+
     private let canvas = InkCanvasView()
     /// Holds the page backgrounds beneath the ink, laid out in document points.
     private let pagesView = UIView()
@@ -103,7 +107,7 @@ final class PagedCanvasView: UIView {
     private var pages: [Page] = []
     private var pageIDs: [Page.ID] = []
     private var indexByPageID: [Page.ID: Int] = [:]
-    private var layout = PageStackLayout(pageSizes: [])
+    private var layout = PageStackLayout(pageSizes: [], scale: documentScale)
     private var pageViews: [Page.ID: PageBackgroundView] = [:]
     private var reusablePageViews: [PageBackgroundView] = []
     private var viewportSize = CGSize.zero
@@ -292,10 +296,9 @@ final class PagedCanvasView: UIView {
 
     /// Brings the page backgrounds to full sharpness for the zoom the view has come to rest at.
     private func settle() {
-        let pixelsPerPoint = pixelsPerPoint
         for (pageID, view) in pageViews {
             guard let index = indexByPageID[pageID] else { continue }
-            view.frame.origin = PixelGrid.snap(layout.frame(ofPageAt: index).origin, pixelsPerPoint: pixelsPerPoint)
+            place(view, atPageAt: index)
         }
         refresh()
     }
@@ -307,11 +310,12 @@ final class PagedCanvasView: UIView {
         updateDisplayedPages(around: visible)
 
         // During a pinch the backgrounds keep their resolution; only pages that show nothing yet are rendered.
-        let pixelsPerPoint = pixelsPerPoint
-        for view in pageViews.values where !isZooming || view.isBlank {
+        let pixelsPerPagePoint = pixelsPerPoint * layout.scale
+        for (pageID, view) in pageViews where !isZooming || view.isBlank {
+            guard let index = indexByPageID[pageID] else { continue }
             view.update(
-                visibleRect: visible.offsetBy(dx: -view.frame.minX, dy: -view.frame.minY),
-                pixelsPerPoint: pixelsPerPoint
+                visibleRect: visible.applying(layout.transform(ofPageAt: index).inverted()),
+                pixelsPerPoint: pixelsPerPagePoint
             )
         }
         showDesk(around: visible)
@@ -350,9 +354,18 @@ final class PagedCanvasView: UIView {
         let page = pages[index]
         let view = reusablePageViews.popLast() ?? PageBackgroundView(renderPool: renderPool)
         view.display(pageSize: page.size.cgSize, renderer: delegate.backgroundRenderer(for: page))
-        view.frame.origin = PixelGrid.snap(layout.frame(ofPageAt: index).origin, pixelsPerPoint: pixelsPerPoint)
+        place(view, atPageAt: index)
         pagesView.addSubview(view)
         pageViews[page.id] = view
+    }
+
+    /// A page view keeps its bounds in page points and is magnified to its frame in the stack, with
+    /// its corner on a screen pixel.
+    private func place(_ view: PageBackgroundView, atPageAt index: Int) {
+        let frame = layout.frame(ofPageAt: index)
+        let origin = PixelGrid.snap(frame.origin, pixelsPerPoint: pixelsPerPoint)
+        view.transform = CGAffineTransform(scaleX: layout.scale, y: layout.scale)
+        view.center = CGPoint(x: origin.x + frame.width / 2, y: origin.y + frame.height / 2)
     }
 
     private func endDisplaying(_ pageID: Page.ID) {
@@ -630,7 +643,7 @@ final class PagedCanvasView: UIView {
     }
 
     private func applyTool() {
-        canvas.tool = tools.pencilKitTool
+        canvas.tool = tools.pencilKitTool(documentScale: Self.documentScale)
         // A selection that the lasso leaves behind is put down when the tool changes.
         reportedInk = nil
         applySelectionGestures()
@@ -698,7 +711,7 @@ extension PagedCanvasView: PagedCanvasControlling {
         pages = newPages
         pageIDs = newPages.map(\.id)
         indexByPageID = Dictionary(uniqueKeysWithValues: zip(pageIDs, pageIDs.indices))
-        layout = PageStackLayout(pageSizes: newPages.map(\.size.cgSize))
+        layout = PageStackLayout(pageSizes: newPages.map(\.size.cgSize), scale: Self.documentScale)
         currentPageIndex = nil
         for pageID in pageViews.keys.filter({ indexByPageID[$0] == nil }) {
             endDisplaying(pageID)
@@ -737,7 +750,7 @@ extension PagedCanvasView: PagedCanvasControlling {
             pendingScrollTarget = pageID
             return
         }
-        let top = layout.frame(ofPageAt: index).minY - PageStackLayout.Metrics.standard.spacing / 2
+        let top = layout.frame(ofPageAt: index).minY - PageStackLayout.Metrics.standard.spacing * layout.scale / 2
         let target = clamped(CGPoint(x: canvas.contentOffset.x, y: top * canvas.zoomScale))
         canvas.setContentOffset(target, animated: animated)
     }

@@ -9,17 +9,18 @@ public protocol InkStroke {
     /// The smallest rectangle that holds everything the stroke draws.
     var bounds: CGRect { get }
 
-    /// The same stroke at another place.
-    func moved(by offset: CGVector) -> Self
+    /// The same stroke moved, and scaled along with its line, by `transform`.
+    func applying(_ transform: CGAffineTransform) -> Self
 
     /// What the stroke draws inside `rect`, or `nil` when it draws nothing there.
     func clipped(to rect: CGRect) -> Self?
 
-    /// Feeds everything that makes up the stroke's appearance into the hasher.
+    /// Feeds everything that makes up the stroke's appearance on its page into the hasher, so that a
+    /// stroke gives the same value in page points and in document points.
     ///
-    /// Positions go in through `InkFingerprint.combine(_:relativeTo:into:)`, so that a stroke gives
-    /// the same value in page coordinates and, relative to its page's origin, in document coordinates.
-    func fingerprint(into hasher: inout Hasher, relativeTo origin: CGPoint)
+    /// - Parameter page: Converts page points to the coordinates the stroke is in. Positions go in
+    ///   through `InkFingerprint.combine(_:into:)` after converting them to page points.
+    func fingerprint(into hasher: inout Hasher, onPage page: CGAffineTransform)
 }
 
 /// A value that changes whenever the strokes on a page change, for telling which pages were edited
@@ -30,25 +31,25 @@ public struct InkFingerprint: Hashable, Sendable {
     /// The fingerprint of a page without ink.
     public init() {}
 
-    /// - Parameter origin: The origin of the strokes' page in the coordinates the strokes are in.
-    public init(of strokes: [some InkStroke], relativeTo origin: CGPoint = .zero) {
-        add(strokes, relativeTo: origin)
+    /// - Parameter page: Converts page points to the coordinates the strokes are in.
+    public init(of strokes: [some InkStroke], onPage page: CGAffineTransform = .identity) {
+        add(strokes, onPage: page)
     }
 
     /// Turns the fingerprint into that of its strokes followed by `strokes`, at the cost of the
     /// added strokes alone.
-    public mutating func add(_ strokes: [some InkStroke], relativeTo origin: CGPoint = .zero) {
+    public mutating func add(_ strokes: [some InkStroke], onPage page: CGAffineTransform = .identity) {
         for stroke in strokes {
             var hasher = Hasher()
-            stroke.fingerprint(into: &hasher, relativeTo: origin)
+            stroke.fingerprint(into: &hasher, onPage: page)
             value = (value &* 0x0000_0100_0000_01b3) ^ UInt64(truncatingIfNeeded: hasher.finalize())
         }
     }
 
-    /// Feeds a position into the hasher at a resolution far finer than anything visible, yet coarser
-    /// than the rounding errors of moving between page and document coordinates.
-    public static func combine(_ point: CGPoint, relativeTo origin: CGPoint, into hasher: inout Hasher) {
-        hasher.combine(((point.x - origin.x) * 1024).rounded())
-        hasher.combine(((point.y - origin.y) * 1024).rounded())
+    /// Feeds a position or size into the hasher at a resolution far finer than anything visible, yet
+    /// coarser than the rounding errors of moving between page and document coordinates.
+    public static func combine(_ point: CGPoint, into hasher: inout Hasher) {
+        hasher.combine((point.x * 1024).rounded())
+        hasher.combine((point.y * 1024).rounded())
     }
 }

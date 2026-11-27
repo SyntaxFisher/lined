@@ -16,9 +16,9 @@ nonisolated extension PKStroke: @retroactive InkStroke {
 
     public var bounds: CGRect { renderBounds }
 
-    public func moved(by offset: CGVector) -> PKStroke {
+    public func applying(_ transform: CGAffineTransform) -> PKStroke {
         var stroke = self
-        stroke.transform = transform.concatenating(CGAffineTransform(translationX: offset.dx, y: offset.dy))
+        stroke.transform = self.transform.concatenating(transform)
         return stroke
     }
 
@@ -62,16 +62,17 @@ nonisolated extension PKStroke: @retroactive InkStroke {
         }
     }
 
-    public func fingerprint(into hasher: inout Hasher, relativeTo origin: CGPoint) {
+    public func fingerprint(into hasher: inout Hasher, onPage page: CGAffineTransform) {
+        let transformOnPage = transform.concatenating(page.inverted())
         hasher.combine(id)
         hasher.combine(path.count)
         hasher.combine(ink.inkType.rawValue)
         hasher.combine(ink.color.cgColor.components)
         for point in [path.first, path.last] {
             guard let point else { continue }
-            InkFingerprint.combine(point.location.applying(transform), relativeTo: origin, into: &hasher)
+            InkFingerprint.combine(point.location.applying(transformOnPage), into: &hasher)
         }
-        for value in [transform.a, transform.b, transform.c, transform.d] {
+        for value in [transformOnPage.a, transformOnPage.b, transformOnPage.c, transformOnPage.d] {
             hasher.combine((value * 1_000_000).rounded())
         }
         // The precise eraser leaves a stroke's path alone and cuts into its mask.
@@ -84,34 +85,38 @@ nonisolated extension PKStroke: @retroactive InkStroke {
             }
             hasher.combine(element.pointee.type.rawValue)
             for index in 0..<pointCount {
-                InkFingerprint.combine(element.pointee.points[index], relativeTo: .zero, into: &hasher)
+                InkFingerprint.combine(element.pointee.points[index], into: &hasher)
             }
         }
     }
 }
 
 extension ToolSettings {
-    /// The tool as PencilKit applies it. Widths are in page points, which is what the canvas draws in.
-    var pencilKitTool: any PKTool {
+    /// The tool as PencilKit applies it on a canvas that draws in document points.
+    ///
+    /// - Parameter documentScale: Document points per page point. The settings give widths in page points.
+    func pencilKitTool(documentScale: CGFloat) -> any PKTool {
         switch tool {
         case .pen:
-            let ink: PKInkingTool.InkType = penStyle == .pen ? .pen : .monoline
-            return PKInkingTool(ink, color: penColor.uiColor, width: ink.validWidthRange.clamping(penLineWidth))
+            let ink = penInkType
+            return PKInkingTool(ink, color: penColor.uiColor, width: ink.validWidthRange.clamping(penLineWidth * documentScale))
         case .highlighter:
             return PKInkingTool(
                 .marker,
                 color: highlighterColor.uiColor,
-                width: PKInkingTool.InkType.marker.validWidthRange.clamping(highlighterLineWidth)
+                width: PKInkingTool.InkType.marker.validWidthRange.clamping(highlighterLineWidth * documentScale)
             )
         case .eraser:
             return switch eraserMode {
             case .stroke: PKEraserTool(.vector)
-            case .precise: PKEraserTool(.bitmap, width: ToolSettings.preciseEraserWidth)
+            case .precise: PKEraserTool(.bitmap, width: ToolSettings.preciseEraserWidth * documentScale)
             }
         case .lasso:
             return PKLassoTool()
         }
     }
+
+    var penInkType: PKInkingTool.InkType { penStyle == .pen ? .pen : .monoline }
 }
 
 extension InkColor {

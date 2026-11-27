@@ -1,11 +1,14 @@
 import CoreGraphics
 
-/// The vertical stack of a notebook's pages in document space: page points, origin at the top-left of the stack.
+/// The vertical stack of a notebook's pages in document space, with the origin at the top-left of the stack.
+///
+/// Document space is page points magnified by `scale`. A canvas draws ink in document points, so a scale
+/// above 1 lets it draw lines on a page that are finer than the thinnest line it draws.
 public struct PageStackLayout: Equatable, Sendable {
     public struct Metrics: Equatable, Sendable {
-        /// Space around the stack.
+        /// Space around the stack, in page points.
         public var margin: CGFloat
-        /// Space between two pages.
+        /// Space between two pages, in page points.
         public var spacing: CGFloat
 
         public init(margin: CGFloat, spacing: CGFloat) {
@@ -16,22 +19,35 @@ public struct PageStackLayout: Equatable, Sendable {
         public static let standard = Metrics(margin: 10, spacing: 10)
     }
 
+    /// Document points per page point.
+    public let scale: CGFloat
     public let contentSize: CGSize
     private let frames: [CGRect]
 
-    public init(pageSizes: [CGSize], metrics: Metrics = .standard) {
-        let contentWidth = (pageSizes.map(\.width).max() ?? 0) + metrics.margin * 2
-        var y = metrics.margin
+    public init(pageSizes: [CGSize], metrics: Metrics = .standard, scale: CGFloat = 1) {
+        self.scale = scale
+        let margin = metrics.margin * scale
+        let spacing = metrics.spacing * scale
+        let contentWidth = (pageSizes.map(\.width).max() ?? 0) * scale + margin * 2
+        var y = margin
         frames = pageSizes.map { size in
-            defer { y += size.height + metrics.spacing }
+            let size = CGSize(width: size.width * scale, height: size.height * scale)
+            defer { y += size.height + spacing }
             return CGRect(x: (contentWidth - size.width) / 2, y: y, width: size.width, height: size.height)
         }
-        contentSize = CGSize(width: contentWidth, height: frames.last.map { $0.maxY + metrics.margin } ?? 0)
+        contentSize = CGSize(width: contentWidth, height: frames.last.map { $0.maxY + margin } ?? 0)
     }
 
     public var pageCount: Int { frames.count }
 
+    /// Where the page lies in the stack, in document points.
     public func frame(ofPageAt index: Int) -> CGRect { frames[index] }
+
+    /// Converts page points of the page to document points.
+    public func transform(ofPageAt index: Int) -> CGAffineTransform {
+        let origin = frames[index].origin
+        return CGAffineTransform(a: scale, b: 0, c: 0, d: scale, tx: origin.x, ty: origin.y)
+    }
 
     /// The pages that share a vertical span with `rect`.
     public func pageIndices(intersecting rect: CGRect) -> Range<Int> {

@@ -44,9 +44,11 @@ mixed up.
 
 `PagedCanvasView` shows the pages as one vertical stack. A single `PKCanvasView` is the scroll view
 of the whole notebook, so scrolling, zooming and ink rendering are PencilKit's own and behave like
-they do in every other app. The canvas draws in document points: page points, offset by the place of
-the page in the stack. Its zoom scale is the number of screen points per document point, and it
-ends at ten, which is as far as PencilKit magnifies a canvas.
+they do in every other app. The canvas draws in document points: page points magnified twice and
+offset by the place of the page in the stack. PencilKit draws no pen line thinner than 0.88 of its
+points, so the magnification lets the finest pen draw lines of half that width on the page. Tool
+widths are set in page points and doubled for PencilKit. Its zoom scale is the number of screen
+points per document point, and it ends at ten, which is as far as PencilKit magnifies a canvas.
 
 - **Virtualized pages.** Only the pages near the viewport have a background view. Views are reused,
   so memory and work do not grow with the length of the document. A view appears half a viewport
@@ -61,7 +63,7 @@ ends at ten, which is as far as PencilKit magnifies a canvas.
   pinch is in progress; what arrives meanwhile waits.
 - **Pages of strokes.** A stroke belongs to the page it starts on, or to the nearest page when it
   starts between two. Moving ink between page points and document points only changes a stroke's
-  transform, so strokes keep their identity and their eraser masks.
+  transform, which scales its line along, so strokes keep their identity and their eraser masks.
 - **Ink ends at the page.** A stroke that is drawn, moved or pasted across the edge of its page is
   split there once the tool has lifted: it becomes one stroke on each page it draws on, each with a
   mask that covers its line on that page, and what it draws beside the pages is dropped. The parts

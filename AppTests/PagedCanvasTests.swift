@@ -19,7 +19,7 @@ private final class CanvasHarness: PagedCanvasDelegate {
 
     init(pageCount: Int = 3) async throws {
         pages = (0..<pageCount).map { _ in Page(size: PageSize(format: .a4, orientation: .portrait), background: .paper(.squared)) }
-        layout = PageStackLayout(pageSizes: pages.map(\.size.cgSize))
+        layout = PageStackLayout(pageSizes: pages.map(\.size.cgSize), scale: PagedCanvasView.documentScale)
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         window = UIWindow(windowScene: scene)
         window.frame = view.frame
@@ -96,10 +96,27 @@ struct PagedCanvasTests {
         for change in step {
             #expect(change.before.isEmpty)
             #expect(change.after.count == 1)
-            let page = CGRect(origin: .zero, size: first.size).insetBy(dx: -0.5, dy: -0.5)
+            let page = CGRect(origin: .zero, size: canvas.pages[0].size.cgSize).insetBy(dx: -0.5, dy: -0.5)
             #expect(change.after.allSatisfy { page.contains($0.renderBounds) })
-            #expect(PKDrawing(strokes: change.after).inkedPixels(in: page) > 50)
+            #expect(PKDrawing(strokes: change.after).inkedPixels(in: page) > 10)
         }
+    }
+
+    @Test func pagesKeepTheirInkInPagePointsAndShowAtTheirFrame() async throws {
+        let canvas = try await CanvasHarness()
+        defer { canvas.close() }
+        let first = canvas.layout.frame(ofPageAt: 0)
+        let scale = PagedCanvasView.documentScale
+        let drawn = PKStroke.line(from: CGPoint(x: first.minX + 100, y: first.minY + 100), to: CGPoint(x: first.minX + 300, y: first.minY + 100), width: 4)
+
+        try await canvas.draw(drawn)
+
+        let stored = try #require(canvas.reports.first?.first?.after.first)
+        #expect(abs(stored.renderBounds.height - drawn.renderBounds.height / scale) < 0.5)
+        #expect(abs(stored.renderBounds.minX - (drawn.renderBounds.minX - first.minX) / scale) < 0.5)
+        let background = try #require(canvas.pagesView.subviews.compactMap { $0 as? PageBackgroundView }.first { $0.frame.minY < first.midY })
+        #expect(background.bounds.size == canvas.pages[0].size.cgSize)
+        #expect(abs(background.frame.width - first.width) < 0.01 && abs(background.frame.minY - first.minY) < 0.5)
     }
 
     @Test func strokesOnOnePageAreOneStepEach() async throws {

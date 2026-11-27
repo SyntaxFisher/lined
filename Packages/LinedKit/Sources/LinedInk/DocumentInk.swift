@@ -4,7 +4,7 @@ import LinedLayout
 /// Converts between the ink of single pages and the ink that a canvas shows for the whole page stack.
 ///
 /// Pages store their ink in page points. The canvas draws in document points, where each page lies at
-/// its frame in the stack. A stroke belongs to the page it starts on, or to the nearest page when it
+/// its frame in the stack, magnified by the layout's scale. A stroke belongs to the page it starts on, or to the nearest page when it
 /// starts between pages. Ink ends at the edge of its page: a stroke drawn across several pages is
 /// split into one stroke on each of them.
 ///
@@ -38,8 +38,8 @@ public enum DocumentInk {
 
     /// Converts strokes that lie on a page in the stack to page points.
     public static func lifted<Stroke: InkStroke>(_ strokes: [Stroke], fromPageAt index: Int, layout: PageStackLayout) -> [Stroke] {
-        let origin = layout.frame(ofPageAt: index).origin
-        return strokes.map { $0.moved(by: CGVector(dx: -origin.x, dy: -origin.y)) }
+        let toPage = layout.transform(ofPageAt: index).inverted()
+        return strokes.map { $0.applying(toPage) }
     }
 
     /// Adds the ink of a page, given in page points, beneath the ink that is already there.
@@ -84,9 +84,9 @@ public enum DocumentInk {
     ) -> [Stroke] {
         strokes.compactMap { stroke in
             guard let oldIndex = pageIndex(of: stroke, layout: oldLayout), let newIndex = newIndices[oldIndex] else { return nil }
-            let from = oldLayout.frame(ofPageAt: oldIndex).origin
-            let to = newLayout.frame(ofPageAt: newIndex).origin
-            return from == to ? stroke : stroke.moved(by: CGVector(dx: to.x - from.x, dy: to.y - from.y))
+            let from = oldLayout.transform(ofPageAt: oldIndex)
+            let to = newLayout.transform(ofPageAt: newIndex)
+            return from == to ? stroke : stroke.applying(from.inverted().concatenating(to))
         }
     }
 
@@ -120,7 +120,7 @@ public enum DocumentInk {
     }
 
     private static func placed<Stroke: InkStroke>(_ ink: [Stroke], onPageAt index: Int, layout: PageStackLayout) -> [Stroke] {
-        let origin = layout.frame(ofPageAt: index).origin
-        return ink.map { $0.moved(by: CGVector(dx: origin.x, dy: origin.y)) }
+        let toDocument = layout.transform(ofPageAt: index)
+        return ink.map { $0.applying(toDocument) }
     }
 }

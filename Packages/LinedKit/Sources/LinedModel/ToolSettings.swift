@@ -100,15 +100,15 @@ public struct ToolSettings: Codable, Equatable, Sendable {
         previousTool == .eraser ? .pen : previousTool
     }
 
-    /// The pen's line width in page points. The fine widths are the thinnest lines PencilKit draws.
+    /// The pen's line width in page points. Each width is about 1.6 times the one below it.
     public var penLineWidth: Double {
         switch (penStyle, penWidth) {
-        case (.pen, .fine): 0.88
-        case (.pen, .medium): 1.4
-        case (.pen, .bold): 3.6
-        case (.fineliner, .fine): 0.5
-        case (.fineliner, .medium): 0.8
-        case (.fineliner, .bold): 2.2
+        case (.pen, .fine): 0.55
+        case (.pen, .medium): 0.88
+        case (.pen, .bold): 1.4
+        case (.fineliner, .fine): 0.31
+        case (.fineliner, .medium): 0.5
+        case (.fineliner, .bold): 0.8
         }
     }
 

@@ -47,6 +47,19 @@ struct PageStackLayoutTests {
         #expect(layout.zoom(fittingWidth: 1240) == 2)
     }
 
+    @Test func magnifiesPagesAndSpacesByTheScale() {
+        let scaled = PageStackLayout(
+            pageSizes: [CGSize(width: 400, height: 600), CGSize(width: 600, height: 400)],
+            metrics: metrics,
+            scale: 2
+        )
+
+        #expect(scaled.contentSize == CGSize(width: 1240, height: 2080))
+        #expect(scaled.frame(ofPageAt: 1) == CGRect(x: 20, y: 1260, width: 1200, height: 800))
+        #expect(CGPoint(x: 10, y: 5).applying(scaled.transform(ofPageAt: 1)) == CGPoint(x: 40, y: 1270))
+        #expect(scaled.zoom(fittingWidth: 1240) == 1)
+    }
+
     @Test func anEmptyStackHasNoPages() {
         let empty = PageStackLayout(pageSizes: [], metrics: metrics)
 
