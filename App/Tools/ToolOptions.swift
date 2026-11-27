@@ -22,7 +22,7 @@ struct ToolOptions: View {
                 ToolBarSeparator(isAcross: isColumn)
                 WidthChoices(selection: $settings.highlighterWidth, color: Color(settings.highlighterColor), isColumn: isColumn)
             case .eraser:
-                choices(ToolSettings.EraserMode.allCases, selection: $settings.eraserMode)
+                textChoices(ToolSettings.EraserMode.allCases, selection: $settings.eraserMode)
                 if settings.eraserMode == .precise {
                     ToolBarSeparator(isAcross: isColumn)
                     WidthChoices(selection: $settings.eraserWidth, color: .secondary, isColumn: isColumn)
@@ -36,6 +36,31 @@ struct ToolOptions: View {
                 .accessibilityLabel("Switch back after erasing")
             case .lasso:
                 EmptyView()
+            }
+        }
+    }
+
+    /// Choices named in words, for options whose difference a small icon does not show.
+    private func textChoices<Choice: TextChoice>(_ all: [Choice], selection: Binding<Choice>) -> some View {
+        let stack = isColumn ? AnyLayout(VStackLayout(spacing: 4)) : AnyLayout(HStackLayout(spacing: 4))
+        return stack {
+            ForEach(all, id: \.self) { choice in
+                let isSelected = choice == selection.wrappedValue
+                Button {
+                    selection.wrappedValue = choice
+                } label: {
+                    Text(choice.title)
+                        .font(isColumn ? .caption.weight(.semibold) : .subheadline.weight(.medium))
+                        .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+                        .padding(.horizontal, isColumn ? 6 : 10)
+                        .frame(minWidth: 36, minHeight: 36)
+                        .background(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear), in: .capsule)
+                        .contentShape(.capsule)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(choice.displayName)
+                .accessibilityInputLabels([choice.title])
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
     }
@@ -160,11 +185,17 @@ extension ToolSettings.PenStyle: ToolChoice {
     }
 }
 
-extension ToolSettings.EraserMode: ToolChoice {
-    fileprivate var symbolName: String {
+/// A choice the tool bar offers as a word.
+private protocol TextChoice: Hashable {
+    var title: LocalizedStringKey { get }
+    var displayName: LocalizedStringKey { get }
+}
+
+extension ToolSettings.EraserMode: TextChoice {
+    fileprivate var title: LocalizedStringKey {
         switch self {
-        case .stroke: "eraser"
-        case .precise: "eraser.line.dashed"
+        case .stroke: "Stroke"
+        case .precise: "Pixel"
         }
     }
 
