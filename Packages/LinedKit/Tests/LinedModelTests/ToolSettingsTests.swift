@@ -9,33 +9,33 @@ struct ToolSettingsTests {
 
     @Test func remembersTheToolUsedBefore() {
         var settings = ToolSettings()
-        settings.select(.highlighter)
+        settings.select(.eraser)
         settings.select(.lasso)
 
         settings.selectPreviousTool()
 
-        #expect(settings.tool == .highlighter)
+        #expect(settings.tool == .eraser)
         #expect(settings.previousTool == .lasso)
     }
 
     @Test func selectingTheCurrentToolKeepsThePreviousOne() {
         var settings = ToolSettings()
-        settings.select(.highlighter)
+        settings.select(.lasso)
 
-        settings.select(.highlighter)
+        settings.select(.lasso)
 
         #expect(settings.previousTool == .pen)
     }
 
     @Test func togglingTheEraserReturnsToTheToolBeforeIt() {
         var settings = ToolSettings()
-        settings.select(.highlighter)
+        settings.select(.lasso)
 
         settings.toggleEraser()
         #expect(settings.tool == .eraser)
 
         settings.toggleEraser()
-        #expect(settings.tool == .highlighter)
+        #expect(settings.tool == .lasso)
 
         settings.toggleEraser()
         #expect(settings.tool == .eraser)
@@ -70,11 +70,6 @@ struct ToolSettingsTests {
             return settings.penLineWidth
         }
         #expect(penWidths == penWidths.sorted() && Set(penWidths).count == penWidths.count)
-        let highlighterWidths = StrokeWidth.allCases.map { width in
-            settings.highlighterWidth = width
-            return settings.highlighterLineWidth
-        }
-        #expect(highlighterWidths == highlighterWidths.sorted() && Set(highlighterWidths).count == highlighterWidths.count)
         let eraserWidths = StrokeWidth.allCases.map { width in
             settings.eraserWidth = width
             return settings.preciseEraserDiameter
@@ -82,8 +77,7 @@ struct ToolSettingsTests {
         #expect(eraserWidths == eraserWidths.sorted() && Set(eraserWidths).count == eraserWidths.count)
     }
 
-    @Test func everyColourIsOfferedExactlyOnceAndIsAValidColour() {
-        #expect((InkColor.penPalette + InkColor.highlighterPalette).sorted { $0.rawValue < $1.rawValue } == InkColor.allCases.sorted { $0.rawValue < $1.rawValue })
+    @Test func everyColourIsAValidColour() {
         for color in InkColor.allCases {
             let (red, green, blue) = color.components
             #expect([red, green, blue].allSatisfy { (0...1).contains($0) })
@@ -92,10 +86,9 @@ struct ToolSettingsTests {
 
     @Test func survivesBeingSavedAndRead() throws {
         var settings = ToolSettings()
-        settings.select(.highlighter)
+        settings.select(.lasso)
         settings.penColor = .blue
         settings.penWidth = .bold
-        settings.highlighterWidth = .bold
         settings.eraserMode = .precise
         settings.returnsAfterErasing = false
 

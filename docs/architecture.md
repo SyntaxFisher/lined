@@ -108,7 +108,7 @@ These properties of PencilKit shape the canvas:
 ## Tools
 
 `ToolSettings` in the model holds the selected tool and what each tool remembers: colour and width
-of the pen and the highlighter, and the mode and width of the eraser. The pen draws an even line.
+of the pen, and the mode and width of the eraser. The pen draws an even line.
 Only the precise eraser has a width: PencilKit's stroke eraser takes what it touches and ignores one.
 PencilKit sizes the precise eraser in screen points, so it erases as much of the screen at any zoom.
 The app maps the settings to PencilKit tools in one place. While the eraser is down, `EraserIndicator`

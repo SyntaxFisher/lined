@@ -12,13 +12,9 @@ struct ToolOptions: View {
         stack {
             switch settings.tool {
             case .pen:
-                ColorChoices(colors: InkColor.penPalette, selection: $settings.penColor, isColumn: isColumn)
+                ColorChoices(colors: InkColor.allCases, selection: $settings.penColor, isColumn: isColumn)
                 ToolBarSeparator(isAcross: isColumn)
                 WidthChoices(selection: $settings.penWidth, isColumn: isColumn)
-            case .highlighter:
-                ColorChoices(colors: InkColor.highlighterPalette, selection: $settings.highlighterColor, isColumn: isColumn)
-                ToolBarSeparator(isAcross: isColumn)
-                WidthChoices(selection: $settings.highlighterWidth, isColumn: isColumn)
             case .eraser:
                 textChoices(ToolSettings.EraserMode.allCases, selection: $settings.eraserMode)
                 if settings.eraserMode == .precise {
@@ -135,7 +131,7 @@ private struct WidthChoices: View {
     }
 }
 
-/// A dot of ink colour, edged so that dark ink stays visible on the dark bar and light ink on the light one.
+/// A dot of ink colour, edged so that dark ink stays visible on the dark bar.
 private struct InkDot: View {
     let color: Color
 
@@ -197,12 +193,6 @@ private extension InkColor {
         case .red: "Red"
         case .purple: "Purple"
         case .brown: "Brown"
-        case .yellow: "Yellow"
-        case .mint: "Mint"
-        case .sky: "Sky Blue"
-        case .pink: "Pink"
-        case .peach: "Peach"
-        case .lilac: "Lilac"
         }
     }
 }

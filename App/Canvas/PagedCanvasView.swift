@@ -803,7 +803,7 @@ extension PagedCanvasView: PKCanvasViewDelegate {
     /// before it is reported; and while the writing goes on, nothing is to hold it up.
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
         guard !isReplacingInk else { return }
-        // Only a pen or a highlighter leaves the ink beneath its strokes as it was.
+        // Only the pen leaves the ink beneath its strokes as it was.
         if !(canvasView.tool is PKInkingTool) {
             reportedInk = nil
         }

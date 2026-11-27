@@ -72,11 +72,6 @@ struct PencilKitInkTests {
             let drawnWidth = CGFloat(settings.penLineWidth) * PagedCanvasView.documentScale
             #expect(PKInkingTool.InkType.monoline.validWidthRange.contains(drawnWidth), "\(width)")
         }
-        for width in StrokeWidth.allCases {
-            settings.highlighterWidth = width
-            let drawnWidth = CGFloat(settings.highlighterLineWidth) * PagedCanvasView.documentScale
-            #expect(PKInkingTool.InkType.marker.validWidthRange.contains(drawnWidth), "\(width)")
-        }
     }
 
     @Test func aStrokeThatStaysOnItsPageIsLeftAlone() {

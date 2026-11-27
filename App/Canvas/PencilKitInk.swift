@@ -103,12 +103,6 @@ extension ToolSettings {
                 color: penColor.uiColor,
                 width: PKInkingTool.InkType.monoline.validWidthRange.clamping(penLineWidth * documentScale)
             )
-        case .highlighter:
-            return PKInkingTool(
-                .marker,
-                color: highlighterColor.uiColor,
-                width: PKInkingTool.InkType.marker.validWidthRange.clamping(highlighterLineWidth * documentScale)
-            )
         case .eraser:
             return switch eraserMode {
             case .stroke: PKEraserTool(.vector)

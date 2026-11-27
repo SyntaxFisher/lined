@@ -1,7 +1,6 @@
 /// A tool for working on the ink of a page.
 public enum DrawingTool: String, Codable, CaseIterable, Sendable {
     case pen
-    case highlighter
     case eraser
     case lasso
 }
@@ -9,12 +8,6 @@ public enum DrawingTool: String, Codable, CaseIterable, Sendable {
 /// A colour of ink. Paper is light in every appearance, so a colour is one fixed value.
 public enum InkColor: String, Codable, CaseIterable, Sendable {
     case black, gray, blue, green, orange, red, purple, brown
-    case yellow, mint, sky, pink, peach, lilac
-
-    /// The colours offered for writing.
-    public static let penPalette: [InkColor] = [.black, .gray, .blue, .green, .orange, .red, .purple, .brown]
-    /// The colours offered for highlighting: light enough to read the text beneath.
-    public static let highlighterPalette: [InkColor] = [.yellow, .mint, .sky, .pink, .peach, .lilac]
 
     /// Red, green and blue in sRGB, each from 0 to 1.
     public var components: (red: Double, green: Double, blue: Double) {
@@ -27,12 +20,6 @@ public enum InkColor: String, Codable, CaseIterable, Sendable {
         case .red: (0.83, 0.14, 0.14)
         case .purple: (0.50, 0.26, 0.76)
         case .brown: (0.50, 0.33, 0.20)
-        case .yellow: (1.00, 0.88, 0.00)
-        case .mint: (0.36, 0.89, 0.50)
-        case .sky: (0.30, 0.74, 1.00)
-        case .pink: (1.00, 0.45, 0.70)
-        case .peach: (1.00, 0.64, 0.25)
-        case .lilac: (0.72, 0.56, 1.00)
         }
     }
 }
@@ -58,8 +45,6 @@ public struct ToolSettings: Codable, Equatable, Sendable {
 
     public var penColor = InkColor.black
     public var penWidth = StrokeWidth.medium
-    public var highlighterColor = InkColor.yellow
-    public var highlighterWidth = StrokeWidth.medium
     public var eraserMode = EraserMode.stroke
     /// How wide the precise eraser is. The stroke eraser takes what it touches and has no width.
     public var eraserWidth = StrokeWidth.fine
@@ -100,15 +85,6 @@ public struct ToolSettings: Codable, Equatable, Sendable {
         case .fine: 0.31
         case .medium: 0.5
         case .bold: 0.8
-        }
-    }
-
-    /// The highlighter's line width in page points.
-    public var highlighterLineWidth: Double {
-        switch highlighterWidth {
-        case .fine: 8
-        case .medium: 14
-        case .bold: 22
         }
     }
 

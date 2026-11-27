@@ -96,16 +96,11 @@ private struct ToolButtons: View {
                 Button {
                     model.tap(tool)
                 } label: {
-                    let inkColor = model.settings.color(of: tool).map(Color.init)
-                    ToolBarIcon(
-                        systemName: tool.symbolName,
-                        isSelected: tool == model.settings.tool,
-                        lineColor: tool.symbolHasLine ? inkColor : nil
-                    )
+                    ToolBarIcon(systemName: tool.symbolName, isSelected: tool == model.settings.tool)
                         .overlay(alignment: .bottom) {
-                            if let inkColor, !tool.symbolHasLine {
+                            if tool == .pen {
                                 Capsule()
-                                    .fill(inkColor)
+                                    .fill(Color(model.settings.penColor))
                                     .strokeBorder(.white.opacity(0.9), lineWidth: 1)
                                     .frame(width: 16, height: 5)
                                     .offset(y: -4)
@@ -125,15 +120,11 @@ private struct ToolButtons: View {
 struct ToolBarIcon: View {
     let systemName: String
     let isSelected: Bool
-    /// The colour of the line beneath symbols that draw one, such as the highlighter.
-    var lineColor: Color?
 
     var body: some View {
-        let face = isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary)
         Image(systemName: systemName)
             .font(.system(size: 18.5, weight: .medium))
-            .symbolRenderingMode(.palette)
-            .foregroundStyle(face, lineColor.map(AnyShapeStyle.init) ?? face)
+            .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
             .frame(width: 44, height: 44)
             .background(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear), in: .circle)
             .contentShape(.circle)
@@ -159,17 +150,6 @@ extension Color {
     }
 }
 
-extension ToolSettings {
-    /// The colour a tool writes in, for the tools that have one.
-    func color(of tool: DrawingTool) -> InkColor? {
-        switch tool {
-        case .pen: penColor
-        case .highlighter: highlighterColor
-        case .eraser, .lasso: nil
-        }
-    }
-}
-
 extension DockEdge {
     var alignment: Alignment {
         switch self {
@@ -185,7 +165,6 @@ extension DrawingTool {
     var displayName: LocalizedStringKey {
         switch self {
         case .pen: "Pen"
-        case .highlighter: "Highlighter"
         case .eraser: "Eraser"
         case .lasso: "Lasso"
         }
@@ -194,12 +173,8 @@ extension DrawingTool {
     var symbolName: String {
         switch self {
         case .pen: "pencil.tip"
-        case .highlighter: "highlighter"
         case .eraser: "eraser"
         case .lasso: "lasso"
         }
     }
-
-    /// Whether the symbol draws a line beneath the tool, which then shows the ink colour.
-    var symbolHasLine: Bool { self == .highlighter }
 }
