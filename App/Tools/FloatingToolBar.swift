@@ -96,11 +96,16 @@ private struct ToolButtons: View {
                 Button {
                     model.tap(tool)
                 } label: {
-                    ToolBarIcon(systemName: tool.symbolName, isSelected: tool == model.settings.tool)
+                    let inkColor = model.settings.color(of: tool).map(Color.init)
+                    ToolBarIcon(
+                        systemName: tool.symbolName,
+                        isSelected: tool == model.settings.tool,
+                        lineColor: tool.symbolHasLine ? inkColor : nil
+                    )
                         .overlay(alignment: .bottom) {
-                            if let color = model.settings.color(of: tool) {
+                            if let inkColor, !tool.symbolHasLine {
                                 Capsule()
-                                    .fill(Color(color))
+                                    .fill(inkColor)
                                     .strokeBorder(.white.opacity(0.9), lineWidth: 1)
                                     .frame(width: 16, height: 5)
                                     .offset(y: -4)
@@ -120,11 +125,15 @@ private struct ToolButtons: View {
 struct ToolBarIcon: View {
     let systemName: String
     let isSelected: Bool
+    /// The colour of the line beneath symbols that draw one, such as the highlighter.
+    var lineColor: Color?
 
     var body: some View {
+        let face = isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary)
         Image(systemName: systemName)
             .font(.system(size: 18.5, weight: .medium))
-            .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+            .symbolRenderingMode(.palette)
+            .foregroundStyle(face, lineColor.map(AnyShapeStyle.init) ?? face)
             .frame(width: 44, height: 44)
             .background(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear), in: .circle)
             .contentShape(.circle)
@@ -190,4 +199,7 @@ extension DrawingTool {
         case .lasso: "lasso"
         }
     }
+
+    /// Whether the symbol draws a line beneath the tool, which then shows the ink colour.
+    var symbolHasLine: Bool { self == .highlighter }
 }
