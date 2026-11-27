@@ -443,6 +443,9 @@ final class PagedCanvasView: UIView {
         canvas.drawing = drawing
         isReplacingInk = false
         reportedInk = nil
+        if tools.tool == .eraser {
+            strokePoints.prepare(for: drawing.strokes)
+        }
     }
 
     private func pageIDs(within reach: CGFloat, of visible: CGRect) -> [Page.ID] {
@@ -655,6 +658,9 @@ final class PagedCanvasView: UIView {
         let isErasing = tools.tool == .eraser
         canvas.drawingGestureRecognizer.isEnabled = !isErasing
         eraserGesture.isEnabled = isErasing
+        if isErasing {
+            strokePoints.prepare(for: canvas.drawing.strokes)
+        }
         // A selection that the lasso leaves behind is put down when the tool changes.
         reportedInk = nil
         applySelectionGestures()
@@ -673,6 +679,9 @@ final class PagedCanvasView: UIView {
 
     /// Where the eraser was when it last erased, in document points.
     private var lastEraserLocation: CGPoint?
+    /// The ink while the eraser is down. Nothing else changes the canvas's ink while a tool is in use.
+    private var inkEraser: InkEraser?
+    private let strokePoints = StrokePoints()
 
     @objc private func followEraser(_ gesture: EraserGestureRecognizer) {
         switch gesture.state {
@@ -682,6 +691,7 @@ final class PagedCanvasView: UIView {
                 inkSettling?.cancel()
                 inkSettling = nil
                 hasErased = true
+                inkEraser = InkEraser(strokes: canvas.drawing.strokes, points: strokePoints)
                 onToolBegin?()
             }
             eraserIndicator.show(at: gesture.location(in: self), diameter: tools.eraserDiameter)
@@ -691,6 +701,8 @@ final class PagedCanvasView: UIView {
         default:
             eraserIndicator.hide()
             lastEraserLocation = nil
+            inkEraser = nil
+            strokePoints.prepare(for: canvas.drawing.strokes)
             isToolInUse = false
             settleInk()
         }
@@ -699,17 +711,7 @@ final class PagedCanvasView: UIView {
     /// Erases what the eraser swept over between two places in document points.
     private func erase(from start: CGPoint, to end: CGPoint) {
         let radius = tools.eraserDiameter / 2 / canvas.zoomScale
-        var strokes: [PKStroke] = []
-        var hasErasedHere = false
-        for stroke in canvas.drawing.strokes {
-            if let remains = stroke.erased(sweptFrom: start, to: end, radius: radius, pixelsPerPoint: min(pixelsPerPoint, 8)) {
-                strokes += remains
-                hasErasedHere = true
-            } else {
-                strokes.append(stroke)
-            }
-        }
-        guard hasErasedHere else { return }
+        guard inkEraser?.erase(from: start, to: end, radius: radius) == true, let strokes = inkEraser?.strokes else { return }
         reportedInk = nil
         canvas.drawing = PKDrawing(strokes: strokes)
     }

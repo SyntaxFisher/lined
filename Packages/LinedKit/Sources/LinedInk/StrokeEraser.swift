@@ -2,7 +2,7 @@ import CoreGraphics
 
 /// Cuts a piece out of a line that an eraser touched, leaving the rest as separate lines.
 public enum StrokeEraser {
-    /// A point of a line: where it lies and how far its line reaches around it.
+    /// A point of a line: where it lies and how far its ink reaches around it.
     public struct LinePoint: Equatable, Sendable {
         public var location: CGPoint
         public var reach: CGFloat
@@ -16,38 +16,45 @@ public enum StrokeEraser {
         }
     }
 
-    /// The runs of `points` that remain once an eraser of `radius`, sweeping from `start` to `end`,
-    /// touched the line.
+    /// The runs of `points` that remain after an eraser of `radius` swept from `start` to `end`, or
+    /// `nil` when it touched none of the line's ink.
     ///
     /// The piece that goes is what lies under the eraser and, along the line, `margin` beyond it on
-    /// either side, so that even a light touch takes a clear piece out of the line. Where no point
-    /// lies under the eraser, as when it only touches the edge of a wide line, the piece is centred
-    /// on the point nearest to it. A run of a single point is dropped: it draws no line.
+    /// either side, so that even a light touch takes a visible piece out of the line. A run of a
+    /// single point is dropped: it draws no line.
     public static func remainingRuns(
         of points: [LinePoint],
-        touchedFrom start: CGPoint,
+        sweptFrom start: CGPoint,
         to end: CGPoint,
         radius: CGFloat,
         margin: CGFloat
-    ) -> [Range<Int>] {
-        let distances = points.map { distance(from: $0.location, toSegmentFrom: start, to: end) }
-        var touched = points.indices.filter { points[$0].isErasable && distances[$0] <= radius + points[$0].reach }
-        if touched.isEmpty, let nearest = points.indices.filter({ points[$0].isErasable }).min(by: { distances[$0] < distances[$1] }) {
-            touched = [nearest]
+    ) -> [Range<Int>]? {
+        var isTouched = points.map { point in
+            point.isErasable && distance(from: point.location, toSegmentFrom: start, to: end) <= radius + point.reach
         }
+        // Between two points far apart, the eraser can touch the line and neither point.
+        for index in points.indices.dropLast() where !isTouched[index] && !isTouched[index + 1] {
+            let (first, second) = (points[index], points[index + 1])
+            guard first.isErasable, second.isErasable else { continue }
+            let gap = distance(betweenSegmentFrom: first.location, to: second.location, andSegmentFrom: start, to: end)
+            if gap <= radius + min(first.reach, second.reach) {
+                isTouched[index] = true
+                isTouched[index + 1] = true
+            }
+        }
+        guard isTouched.contains(true) else { return nil }
         let along = lengthsAlong(points)
-        let isTouched = Set(touched)
         // How far along the line each point lies from the nearest touched point before and after it.
         var fromBefore = [CGFloat](repeating: .infinity, count: points.count)
         var lastTouched: CGFloat?
         for index in points.indices {
-            if isTouched.contains(index) { lastTouched = along[index] }
+            if isTouched[index] { lastTouched = along[index] }
             if let lastTouched { fromBefore[index] = along[index] - lastTouched }
         }
         var fromAfter = [CGFloat](repeating: .infinity, count: points.count)
         var nextTouched: CGFloat?
         for index in points.indices.reversed() {
-            if isTouched.contains(index) { nextTouched = along[index] }
+            if isTouched[index] { nextTouched = along[index] }
             if let nextTouched { fromAfter[index] = nextTouched - along[index] }
         }
         let erased = points.indices.map { index in
@@ -83,7 +90,30 @@ public enum StrokeEraser {
         return lengths
     }
 
-    public static func distance(from point: CGPoint, toSegmentFrom start: CGPoint, to end: CGPoint) -> CGFloat {
+    static func distance(
+        betweenSegmentFrom a: CGPoint,
+        to b: CGPoint,
+        andSegmentFrom c: CGPoint,
+        to d: CGPoint
+    ) -> CGFloat {
+        if segmentsCross(a, b, c, d) { return 0 }
+        return min(
+            distance(from: a, toSegmentFrom: c, to: d),
+            distance(from: b, toSegmentFrom: c, to: d),
+            distance(from: c, toSegmentFrom: a, to: b),
+            distance(from: d, toSegmentFrom: a, to: b)
+        )
+    }
+
+    private static func segmentsCross(_ a: CGPoint, _ b: CGPoint, _ c: CGPoint, _ d: CGPoint) -> Bool {
+        func side(_ p: CGPoint, _ q: CGPoint, _ r: CGPoint) -> CGFloat {
+            (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x)
+        }
+        let abc = side(a, b, c), abd = side(a, b, d), cda = side(c, d, a), cdb = side(c, d, b)
+        return abc * abd < 0 && cda * cdb < 0
+    }
+
+    static func distance(from point: CGPoint, toSegmentFrom start: CGPoint, to end: CGPoint) -> CGFloat {
         let segment = CGPoint(x: end.x - start.x, y: end.y - start.y)
         let lengthSquared = segment.x * segment.x + segment.y * segment.y
         let along = lengthSquared == 0

@@ -99,8 +99,12 @@ These properties of PencilKit shape the canvas:
 - PencilKit's erasers take whole strokes or leave slivers of a line beside their path. The canvas
   therefore erases itself: once the eraser covers a pixel of a stroke's ink, it cuts a piece about
   its own diameter out of the stroke across the line's whole width, and the remaining pieces
-  become new strokes with round ends like the line's own. Whether a pixel is covered is decided on
-  the drawn stroke, since the width PencilKit keeps for a point is the widest a pen can draw there.
+  become new strokes with round ends like the line's own. The line PencilKit draws through a point
+  is twice as wide as the size it keeps for the point exceeds two, which tells whether a pixel is
+  covered.
+- PencilKit hands out a path's points slowly, and testing them against the mask of a stroke cut at
+  a page's edge is slow too. While the eraser is chosen, the canvas reads the points of its strokes
+  in the background, so that erasing only calculates.
 - PencilKit drops a lasso selection whenever its view is resized, so the canvas keeps its size when
   a keyboard appears.
 - PencilKit takes the focus while strokes are selected and accepts typed text there, which would
@@ -113,9 +117,9 @@ These properties of PencilKit shape the canvas:
 `ToolSettings` in the model holds the selected tool and what each tool remembers: colour and width
 of the pen, and the width of the eraser. The pen draws an even line. The eraser's size is in screen
 points, so it erases as much of the screen at any zoom; `StrokeEraser` in `LinedInk` decides which
-points of a line it sweeps over, and `EraserIndicator` outlines it under the touch. The app maps the
-settings to PencilKit tools in one place. The settings and the edge the tool bar is docked to are
-saved as preferences of the app, not of a notebook.
+points of a line it sweeps over, `InkEraser` cuts the strokes with it, and `EraserIndicator` outlines
+it under the touch. The app maps the settings to PencilKit tools in one place. The settings and the
+edge the tool bar is docked to are saved as preferences of the app, not of a notebook.
 
 `FloatingToolBar` replaces the system tool picker. It floats above the canvas, unfolds the options
 of the selected tool in place and can be dragged to any edge of the screen; `DockEdge` picks the edge
