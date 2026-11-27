@@ -10,23 +10,11 @@ public struct PageSize: Equatable, Codable, Sendable {
         self.height = height
     }
 
-    public init(format: PaperFormat, orientation: PageOrientation) {
-        let portrait = format.portraitSize
+    /// A4, the paper every notebook is made of. Imported PDF pages keep their own sizes.
+    public static func a4(_ orientation: PageOrientation) -> PageSize {
         switch orientation {
-        case .portrait: self = portrait
-        case .landscape: self = PageSize(width: portrait.height, height: portrait.width)
-        }
-    }
-}
-
-public enum PaperFormat: String, CaseIterable, Codable, Sendable {
-    case a4
-    case letter
-
-    var portraitSize: PageSize {
-        switch self {
-        case .a4: PageSize(width: 595, height: 842)
-        case .letter: PageSize(width: 612, height: 792)
+        case .portrait: PageSize(width: 595, height: 842)
+        case .landscape: PageSize(width: 842, height: 595)
         }
     }
 }

@@ -26,7 +26,7 @@ public final class PDFDocumentSource: @unchecked Sendable {
     /// The size each page is displayed at: its crop box, turned by the page's rotation.
     public var pageSizes: [PageSize] {
         (0..<pageCount).map { index in
-            guard let page = document.page(at: index + 1) else { return PageSize(format: .a4, orientation: .portrait) }
+            guard let page = document.page(at: index + 1) else { return PageSize.a4(.portrait) }
             let size = PDFPageBackgroundRenderer.displaySize(of: page)
             return PageSize(width: size.width, height: size.height)
         }

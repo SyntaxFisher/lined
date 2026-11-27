@@ -6,7 +6,7 @@ import Testing
 struct NotebookPackageTests {
     private let directory: TemporaryDirectory
     private let store: NotebookPackageStore
-    private let a4 = PageSize(format: .a4, orientation: .portrait)
+    private let a4 = PageSize.a4(.portrait)
 
     init() throws {
         directory = try TemporaryDirectory()

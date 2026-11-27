@@ -4,7 +4,7 @@ import Testing
 
 struct NotebookDocumentTests {
     @Test func paperNotebookStartsWithOnePage() {
-        let size = PageSize(format: .a4, orientation: .landscape)
+        let size = PageSize.a4(.landscape)
         let document = NotebookDocument.paper(.squared, size: size)
 
         #expect(size == PageSize(width: 842, height: 595))
@@ -25,7 +25,7 @@ struct NotebookDocumentTests {
     }
 
     @Test func insertsPagesAtClampedPositions() {
-        var document = NotebookDocument.paper(.blank, size: PageSize(format: .a4, orientation: .portrait))
+        var document = NotebookDocument.paper(.blank, size: PageSize.a4(.portrait))
         let first = document.pages[0]
         let appended = first.successor()
         let prepended = first.successor()
@@ -38,7 +38,7 @@ struct NotebookDocumentTests {
     }
 
     @Test func keepsAtLeastOnePage() throws {
-        var document = NotebookDocument.paper(.blank, size: PageSize(format: .a4, orientation: .portrait))
+        var document = NotebookDocument.paper(.blank, size: PageSize.a4(.portrait))
         let first = document.pages[0]
         let second = first.successor()
         document.insert(second, at: 1)

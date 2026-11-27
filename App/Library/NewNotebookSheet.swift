@@ -2,7 +2,7 @@ import LinedModel
 import LinedRendering
 import SwiftUI
 
-/// Sets up a paper notebook: title, ruling, paper size and orientation.
+/// Sets up a paper notebook: title, ruling and orientation. Notebooks are A4.
 struct NewNotebookSheet: View {
     let folderID: Folder.ID?
     /// Called with the new notebook just before the sheet closes.
@@ -12,7 +12,6 @@ struct NewNotebookSheet: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(Preference.lastPaperTemplate) private var template = PaperTemplate.lined
     @State private var title = ""
-    @State private var format = PaperFormat.matchingRegion
     @State private var orientation = PageOrientation.portrait
     @State private var isCreating = false
 
@@ -25,10 +24,6 @@ struct NewNotebookSheet: View {
                 Section("Paper") {
                     PaperTemplatePicker(selection: $template)
                         .listRowInsets(EdgeInsets(top: 16, leading: 16, bottom: 12, trailing: 16))
-                    Picker("Size", selection: $format) {
-                        Text("A4").tag(PaperFormat.a4)
-                        Text("Letter").tag(PaperFormat.letter)
-                    }
                     Picker("Orientation", selection: $orientation) {
                         Text("Portrait").tag(PageOrientation.portrait)
                         Text("Landscape").tag(PageOrientation.landscape)
@@ -58,7 +53,7 @@ struct NewNotebookSheet: View {
                 let notebook = try await library.createNotebook(
                     titled: title.isEmpty ? String(localized: "Untitled Notebook") : title,
                     template: template,
-                    pageSize: PageSize(format: format, orientation: orientation),
+                    pageSize: .a4(orientation),
                     in: folderID
                 )
                 onCreate(notebook)
@@ -68,13 +63,6 @@ struct NewNotebookSheet: View {
                 library.failureMessage = ErrorMessage.text(for: error)
             }
         }
-    }
-}
-
-private extension PaperFormat {
-    /// Letter where it is the everyday paper size, A4 everywhere else.
-    static var matchingRegion: PaperFormat {
-        Locale.current.measurementSystem == .us ? .letter : .a4
     }
 }
 
@@ -109,7 +97,7 @@ private struct PaperTemplatePicker: View {
 
     /// The top-left corner of each paper at reading size, drawn by the renderer the pages use.
     private static let previews: [PaperTemplate: CGImage] = {
-        let pageSize = PageSize(format: .a4, orientation: .portrait).cgSize
+        let pageSize = PageSize.a4(.portrait).cgSize
         let corner = CGRect(x: 0, y: 0, width: 150, height: 200)
         return Dictionary(uniqueKeysWithValues: PaperTemplate.allCases.compactMap { template in
             PageRasterizer

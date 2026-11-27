@@ -18,7 +18,7 @@ private final class CanvasHarness: PagedCanvasDelegate {
     private let window: UIWindow
 
     init(pageCount: Int = 3) async throws {
-        pages = (0..<pageCount).map { _ in Page(size: PageSize(format: .a4, orientation: .portrait), background: .paper(.squared)) }
+        pages = (0..<pageCount).map { _ in Page(size: PageSize.a4(.portrait), background: .paper(.squared)) }
         layout = PageStackLayout(pageSizes: pages.map(\.size.cgSize), scale: PagedCanvasView.documentScale)
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         window = UIWindow(windowScene: scene)
