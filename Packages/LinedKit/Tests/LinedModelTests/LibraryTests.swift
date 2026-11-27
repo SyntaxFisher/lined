@@ -91,6 +91,41 @@ struct LibraryTests {
         #expect(library.folder(outer.id)?.parentID == nil)
     }
 
+    @Test func movesSeveralItemsTogetherOrNotAtAll() throws {
+        var library = Library()
+        let target = try library.createFolder(named: "Target", in: nil, at: date(0))
+        let inner = try library.createFolder(named: "Inner", in: target.id, at: date(0))
+        let first = try library.addNotebook(titled: "First", in: nil, at: date(0))
+        let second = try library.addNotebook(titled: "Second", in: nil, at: date(0))
+
+        #expect(library.canMove([.notebook(first.id), .notebook(second.id)], to: target.id))
+        #expect(!library.canMove([.notebook(first.id), .notebook(second.id)], to: nil))
+        #expect(!library.canMove([.notebook(first.id), .folder(target.id)], to: inner.id))
+        #expect(throws: LibraryError.folderCannotContainItself) {
+            try library.move([.notebook(first.id), .folder(target.id)], to: inner.id)
+        }
+        #expect(library.notebook(first.id)?.folderID == nil)
+
+        try library.move([.notebook(first.id), .notebook(second.id)], to: inner.id, at: date(9))
+
+        #expect(library.contents(of: inner.id, sortedBy: .name).map(\.name) == ["First", "Second"])
+        #expect(library.folder(inner.id)?.modifiedAt == date(9))
+    }
+
+    @Test func deletesSeveralItemsIncludingOnesInsideDeletedFolders() throws {
+        var library = Library()
+        let folder = try library.createFolder(named: "Folder", in: nil)
+        let inside = try library.addNotebook(titled: "Inside", in: folder.id)
+        let loose = try library.addNotebook(titled: "Loose", in: nil)
+        let kept = try library.addNotebook(titled: "Kept", in: nil)
+
+        let removed = try library.delete([.folder(folder.id), .notebook(inside.id), .notebook(loose.id)])
+
+        #expect(removed == [inside.id, loose.id])
+        #expect(library.notebooks == [kept])
+        #expect(throws: LibraryError.notebookNotFound) { try library.delete([.notebook(loose.id)]) }
+    }
+
     @Test func deletingAFolderRemovesEverythingInside() throws {
         var library = Library()
         let outer = try library.createFolder(named: "Outer", in: nil)

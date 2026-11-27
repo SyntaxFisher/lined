@@ -3,18 +3,23 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// The contents of one folder, or of the library root, as a grid of folders and notebook covers.
+/// Items can be dragged onto folders, also several selected ones, and folders open while a drag is underway.
 struct FolderScreen: View {
     let folderID: Folder.ID?
 
     @Environment(LibraryModel.self) private var library
     @Environment(LibraryNavigator.self) private var navigator
     @State private var namePrompt: NamePrompt?
-    @State private var itemToMove: LibraryEntry?
-    @State private var itemToDelete: LibraryEntry?
+    @State private var moveRequest: MoveRequest?
+    @State private var itemsToDelete: [LibraryEntry] = []
     @State private var isCreatingNotebook = false
     @State private var createdNotebook: Notebook?
     @State private var isChoosingPDF = false
     @State private var isImporting = false
+    @State private var isSelecting = false
+    @State private var selection: Set<LibraryEntry.ID> = []
+    @State private var isDragging = false
+    @State private var dropTarget: Folder.ID?
 
     private let columns = [GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 28, alignment: .top)]
 
@@ -25,23 +30,22 @@ struct FolderScreen: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 32) {
                 ForEach(items) { item in
-                    Button {
-                        navigator.open(item)
-                    } label: {
-                        LibraryEntryCell(item: item)
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button("Rename", systemImage: "pencil") { namePrompt = .rename(item, in: library) }
-                        Button("Move", systemImage: "folder") { itemToMove = item }
-                        Divider()
-                        Button("Delete", systemImage: "trash", role: .destructive) { itemToDelete = item }
-                    }
+                    cell(for: item)
                 }
             }
             .padding(.horizontal, 32)
             .padding(.vertical, 24)
+            .dragContainer(for: LibraryDragItem.self) { ids in ids.map(LibraryDragItem.init) }
+            .dragContainerSelection(isSelecting ? Array(selection) : [])
+            .dragConfiguration(DragConfiguration(allowMove: true))
+            .onDragSessionUpdated { session in
+                switch session.phase {
+                case .initial, .active: isDragging = true
+                default: isDragging = false
+                }
+            }
         }
+        .libraryDropDestination(folderID, isTargeted: .constant(false))
         .overlay {
             if items.isEmpty {
                 ContentUnavailableView(
@@ -56,61 +60,161 @@ struct FolderScreen: View {
             }
         }
         .navigationTitle(title)
+        .navigationBarBackButtonHidden(isSelecting)
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Menu("Sort", systemImage: "arrow.up.arrow.down") {
-                    Picker("Sort By", selection: $library.sortOrder) {
-                        ForEach(LibrarySortOrder.allCases, id: \.self) { order in
-                            Text(order.displayName).tag(order)
-                        }
+            if isSelecting {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(selection.count == items.count ? "Deselect All" : "Select All") {
+                        selection = selection.count == items.count ? [] : Set(items.map(\.id))
                     }
                 }
-                Menu("New", systemImage: "plus") {
-                    Button("Notebook", systemImage: "book.closed") { isCreatingNotebook = true }
-                    Button("Folder", systemImage: "folder.badge.plus") { namePrompt = .newFolder(in: folderID, of: library) }
-                    Button("Import PDF", systemImage: "arrow.down.doc") { isChoosingPDF = true }
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button("Move", systemImage: "folder") {
+                        moveRequest = MoveRequest(items: selectedItems(in: items))
+                    }
+                    .disabled(selection.isEmpty)
+                    Button("Delete", systemImage: "trash", role: .destructive) {
+                        itemsToDelete = selectedItems(in: items)
+                    }
+                    .disabled(selection.isEmpty)
+                }
+                ToolbarSpacer(.fixed, placement: .topBarTrailing)
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done", role: .confirm) { endSelection() }
+                }
+            } else {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    // Sorting stays one long press away from selecting.
+                    Menu("Select", systemImage: "checkmark.circle") {
+                        Picker("Sort By", selection: $library.sortOrder) {
+                            ForEach(LibrarySortOrder.allCases, id: \.self) { order in
+                                Text(order.displayName).tag(order)
+                            }
+                        }
+                    } primaryAction: {
+                        isSelecting = true
+                    }
+                    Menu("New", systemImage: "plus") {
+                        Button("Notebook", systemImage: "book.closed") { isCreatingNotebook = true }
+                        Button("Folder", systemImage: "folder.badge.plus") { namePrompt = .newFolder(in: folderID, of: library) }
+                        Button("Import PDF", systemImage: "arrow.down.doc") { isChoosingPDF = true }
+                    }
                 }
             }
+        }
+        .onChange(of: items.map(\.id)) { _, ids in
+            selection.formIntersection(ids)
         }
         .namePrompt($namePrompt)
         .sheet(isPresented: $isCreatingNotebook, onDismiss: openCreatedNotebook) {
             NewNotebookSheet(folderID: folderID) { createdNotebook = $0 }
         }
-        .sheet(item: $itemToMove) { item in
-            MoveSheet(item: item)
+        .sheet(item: $moveRequest) { request in
+            MoveSheet(request: request) { endSelection() }
         }
         .fileImporter(isPresented: $isChoosingPDF, allowedContentTypes: [.pdf], allowsMultipleSelection: true) { result in
             if case .success(let urls) = result {
                 Task { await importPDFs(urls) }
             }
         }
-        .alert(deletionTitle, isPresented: isConfirmingDeletion, presenting: itemToDelete) { item in
+        .alert(deletionTitle, isPresented: isConfirmingDeletion) {
             Button("Delete", role: .destructive) {
-                library.perform { try library.delete(item.id) }
+                let ids = itemsToDelete.map(\.id)
+                library.perform { try library.delete(ids) }
+                endSelection()
             }
             Button("Cancel", role: .cancel) {}
-        } message: { item in
-            if case .folder = item {
-                Text("The folder and everything in it will be deleted. This can't be undone.")
-            } else {
-                Text("This can't be undone.")
-            }
+        } message: {
+            Text(deletionMessage)
         }
     }
 
+    @ViewBuilder private func cell(for item: LibraryEntry) -> some View {
+        let button = Button {
+            activate(item)
+        } label: {
+            LibraryEntryCell(
+                item: item,
+                isSelected: isSelecting ? selection.contains(item.id) : nil,
+                isDropTarget: dropTarget.map { .folder($0) == item.id } ?? false
+            )
+        }
+        .buttonStyle(.plain)
+        .draggable(containerItemID: item.id)
+        .contextMenu {
+            Button("Rename", systemImage: "pencil") { namePrompt = .rename(item, in: library) }
+            Button("Move", systemImage: "folder") { moveRequest = MoveRequest(items: [item]) }
+            Divider()
+            Button("Delete", systemImage: "trash", role: .destructive) { itemsToDelete = [item] }
+        }
+
+        switch item {
+        case .folder(let folder):
+            button
+                .springLoadingBehavior(.enabled)
+                .libraryDropDestination(folder.id, isTargeted: Binding {
+                    dropTarget == folder.id
+                } set: { isTargeted in
+                    if isTargeted {
+                        dropTarget = folder.id
+                    } else if dropTarget == folder.id {
+                        dropTarget = nil
+                    }
+                })
+        case .notebook:
+            button
+        }
+    }
+
+    /// A tap selects while selecting, except during a drag, where it opens a folder to drop into.
+    private func activate(_ item: LibraryEntry) {
+        if isSelecting && !isDragging {
+            if selection.remove(item.id) == nil {
+                selection.insert(item.id)
+            }
+        } else {
+            navigator.open(item)
+        }
+    }
+
+    private func selectedItems(in items: [LibraryEntry]) -> [LibraryEntry] {
+        items.filter { selection.contains($0.id) }
+    }
+
+    private func endSelection() {
+        isSelecting = false
+        selection = []
+    }
+
     private var title: String {
-        folderID.flatMap(library.library.folder)?.name ?? String(localized: "Library")
+        if isSelecting {
+            return selection.isEmpty ? String(localized: "Select Items") : String(localized: "\(selection.count) Selected")
+        }
+        return folderID.flatMap(library.library.folder)?.name ?? String(localized: "Library")
     }
 
     private var deletionTitle: String {
-        String(localized: "Delete “\(itemToDelete?.name ?? "")”?")
+        if let item = itemsToDelete.first, itemsToDelete.count == 1 {
+            String(localized: "Delete “\(item.name)”?")
+        } else {
+            String(localized: "Delete \(itemsToDelete.count) Items?")
+        }
+    }
+
+    private var deletionMessage: String {
+        let folderCount = itemsToDelete.count { if case .folder = $0 { true } else { false } }
+        return switch (folderCount, itemsToDelete.count) {
+        case (0, _): String(localized: "This can't be undone.")
+        case (1, 1): String(localized: "The folder and everything in it will be deleted. This can't be undone.")
+        default: String(localized: "Folders are deleted with everything in them. This can't be undone.")
+        }
     }
 
     private var isConfirmingDeletion: Binding<Bool> {
         Binding {
-            itemToDelete != nil
+            !itemsToDelete.isEmpty
         } set: { isPresented in
-            if !isPresented { itemToDelete = nil }
+            if !isPresented { itemsToDelete = [] }
         }
     }
 
@@ -139,8 +243,47 @@ struct FolderScreen: View {
     }
 }
 
+private extension View {
+    /// Moves library items dropped here into `destination`, the root when `nil`.
+    func libraryDropDestination(_ destination: Folder.ID?, isTargeted: Binding<Bool>) -> some View {
+        modifier(LibraryDropDestination(destination: destination, isTargeted: isTargeted))
+    }
+}
+
+private struct LibraryDropDestination: ViewModifier {
+    let destination: Folder.ID?
+    @Binding var isTargeted: Bool
+
+    @Environment(LibraryModel.self) private var library
+
+    func body(content: Content) -> some View {
+        content
+            .dropDestination(for: LibraryDragItem.self) { items, _ in
+                isTargeted = false
+                library.perform { try library.move(items.map(\.id), to: destination) }
+            }
+            .dropConfiguration { session in
+                DropConfiguration(operation: accepts(session) ? .move : .forbidden)
+            }
+            .onDropSessionUpdated { session in
+                switch session.phase {
+                case .entering, .active: isTargeted = accepts(session)
+                default: isTargeted = false
+                }
+            }
+    }
+
+    private func accepts(_ session: DropSession) -> Bool {
+        let items = session.localSession?.draggedItemIDs(for: LibraryEntry.ID.self) ?? []
+        return library.library.canMove(items, to: destination)
+    }
+}
+
 private struct LibraryEntryCell: View {
     let item: LibraryEntry
+    /// `nil` outside of selecting.
+    let isSelected: Bool?
+    let isDropTarget: Bool
 
     @Environment(LibraryModel.self) private var library
 
@@ -148,6 +291,19 @@ private struct LibraryEntryCell: View {
         VStack(spacing: 10) {
             picture
                 .frame(height: 190, alignment: .bottom)
+                .overlay(alignment: .bottomTrailing) {
+                    if let isSelected {
+                        SelectionMark(isSelected: isSelected)
+                            .offset(x: 6, y: 6)
+                    }
+                }
+                .scaleEffect(isDropTarget ? 1.08 : 1)
+                .background {
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(.tint.opacity(isDropTarget ? 0.18 : 0))
+                        .padding(-10)
+                }
+                .animation(.snappy(duration: 0.2), value: isDropTarget)
             VStack(spacing: 2) {
                 Text(item.name)
                     .font(.subheadline.weight(.medium))
@@ -161,7 +317,7 @@ private struct LibraryEntryCell: View {
         .frame(maxWidth: .infinity)
         .contentShape(.rect)
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(isSelected == true ? [.isButton, .isSelected] : .isButton)
     }
 
     @ViewBuilder private var picture: some View {
@@ -186,6 +342,19 @@ private struct LibraryEntryCell: View {
         case .notebook(let notebook):
             Text(notebook.modifiedAt, format: Date.FormatStyle(date: .abbreviated, time: .shortened))
         }
+    }
+}
+
+private struct SelectionMark: View {
+    let isSelected: Bool
+
+    var body: some View {
+        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+            .font(.title2)
+            .symbolRenderingMode(.palette)
+            .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary), isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear))
+            .background(.background, in: .circle)
+            .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
     }
 }
 

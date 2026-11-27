@@ -48,15 +48,15 @@ final class LibraryModel {
         try update { try $0.rename(item, to: name) }
     }
 
-    func move(_ item: LibraryEntry.ID, to destination: Folder.ID?) throws {
-        try update { try $0.move(item, to: destination) }
+    func move(_ items: [LibraryEntry.ID], to destination: Folder.ID?) throws {
+        try update { try $0.move(items, to: destination) }
     }
 
     /// Packages go first: a catalog entry without a package is dropped at the next launch,
     /// whereas a package without an entry would come back as a recovered notebook.
-    func delete(_ item: LibraryEntry.ID) throws {
+    func delete(_ items: [LibraryEntry.ID]) throws {
         var draft = library
-        let removedNotebooks = try draft.delete(item)
+        let removedNotebooks = try draft.delete(items)
         for id in removedNotebooks {
             try packages.deletePackage(for: id)
         }

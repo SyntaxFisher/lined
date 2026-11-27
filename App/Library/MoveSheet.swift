@@ -1,9 +1,16 @@
 import LinedModel
 import SwiftUI
 
-/// Picks the folder an item moves to from the whole folder tree.
+/// Items the user wants to move, waiting for a destination.
+struct MoveRequest: Identifiable {
+    let id = UUID()
+    let items: [LibraryEntry]
+}
+
+/// Picks the folder items move to from the whole folder tree.
 struct MoveSheet: View {
-    let item: LibraryEntry
+    let request: MoveRequest
+    var onMove: () -> Void = {}
 
     @Environment(LibraryModel.self) private var library
     @Environment(\.dismiss) private var dismiss
@@ -16,7 +23,7 @@ struct MoveSheet: View {
                     destination(node.folder.id, name: node.folder.name, symbol: "folder", depth: node.depth + 1)
                 }
             }
-            .navigationTitle("Move “\(item.name)”")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -26,10 +33,19 @@ struct MoveSheet: View {
         }
     }
 
+    private var title: String {
+        if let item = request.items.first, request.items.count == 1 {
+            String(localized: "Move “\(item.name)”")
+        } else {
+            String(localized: "Move \(request.items.count) Items")
+        }
+    }
+
     private func destination(_ folderID: Folder.ID?, name: String, symbol: String, depth: Int) -> some View {
-        let isCurrentLocation = item.parentID == folderID
+        let isCurrentLocation = request.items.allSatisfy { $0.parentID == folderID }
         return Button {
-            library.perform { try library.move(item.id, to: folderID) }
+            library.perform { try library.move(request.items.map(\.id), to: folderID) }
+            onMove()
             dismiss()
         } label: {
             HStack {
@@ -43,6 +59,6 @@ struct MoveSheet: View {
                 }
             }
         }
-        .disabled(isCurrentLocation || !library.library.canMove(item.id, to: folderID))
+        .disabled(!library.library.canMove(request.items.map(\.id), to: folderID))
     }
 }

@@ -7,7 +7,7 @@ Lined is in early development and not available yet.
 
 ## What works today
 
-- A library with nested folders and notebook covers.
+- A library with nested folders and notebook covers. Drag notebooks and folders into folders, or select several to move or delete them at once.
 - Notebooks on blank, lined, squared or dotted paper, and notebooks made from imported PDFs.
 - Handwriting with Apple Pencil on every page, sharp at any zoom, saved as you write.
 - A pen, a highlighter, an eraser and a lasso in a tool bar that docks to any edge of the screen.

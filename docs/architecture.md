@@ -20,6 +20,9 @@ iPadOS and macOS; nothing in them touches UIKit, SwiftUI or PencilKit.
 The app target is split by feature:
 
 - `App/Library` shows folders and notebooks. `LibraryModel` is the only place that changes the library.
+  Items are dragged within the app as `LibraryDragItem`, which only names the item; its content type
+  is declared in `App/Info.plist`. Folders open when a drag rests on them or another finger taps them,
+  so an item can travel into a subfolder in one drag.
 - `App/Notebook` opens one notebook. `NotebookSession` owns its pages, ink, undo history and saving.
 - `App/Canvas` is the UIKit bridge that scrolls, zooms and draws the pages.
 - `App/Tools` is the floating tool bar with the options of each tool.

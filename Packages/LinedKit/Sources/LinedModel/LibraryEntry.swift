@@ -41,7 +41,7 @@ public enum LibraryEntry: Identifiable, Hashable, Sendable {
     case folder(Folder)
     case notebook(Notebook)
 
-    public enum ID: Hashable, Sendable {
+    public enum ID: Hashable, Codable, Sendable {
         case folder(Folder.ID)
         case notebook(Notebook.ID)
     }

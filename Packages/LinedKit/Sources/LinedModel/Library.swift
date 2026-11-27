@@ -32,6 +32,13 @@ public struct Library: Equatable, Sendable {
 
     public func notebook(_ id: Notebook.ID) -> Notebook? { notebooksByID[id] }
 
+    public func entry(_ id: LibraryEntry.ID) -> LibraryEntry? {
+        switch id {
+        case .folder(let id): foldersByID[id].map(LibraryEntry.folder)
+        case .notebook(let id): notebooksByID[id].map(LibraryEntry.notebook)
+        }
+    }
+
     public func contents(of folderID: Folder.ID?, sortedBy order: LibrarySortOrder) -> [LibraryEntry] {
         let folders = foldersByID.values.filter { $0.parentID == folderID }.map(LibraryEntry.folder)
         let notebooks = notebooksByID.values.filter { $0.folderID == folderID }.map(LibraryEntry.notebook)
@@ -86,6 +93,11 @@ public struct Library: Equatable, Sendable {
             guard let destination else { return true }
             return !path(to: destination).contains { $0.id == id }
         }
+    }
+
+    /// Whether all items may move to the destination and at least one of them is somewhere else.
+    public func canMove(_ items: [LibraryEntry.ID], to destination: Folder.ID?) -> Bool {
+        items.allSatisfy { canMove($0, to: destination) } && items.contains { entry($0)?.parentID != destination }
     }
 
     // MARK: Mutations
@@ -152,6 +164,15 @@ public struct Library: Equatable, Sendable {
         touchFolder(destination, at: date)
     }
 
+    /// Moves every item, or none of them when one cannot move.
+    public mutating func move(_ items: [LibraryEntry.ID], to destination: Folder.ID?, at date: Date = .now) throws(LibraryError) {
+        var draft = self
+        for item in items {
+            try draft.move(item, to: destination, at: date)
+        }
+        self = draft
+    }
+
     /// Removes the item, and for a folder everything inside it. Returns the notebooks that left the library.
     @discardableResult
     public mutating func delete(_ item: LibraryEntry.ID, at date: Date = .now) throws(LibraryError) -> Set<Notebook.ID> {
@@ -169,6 +190,18 @@ public struct Library: Equatable, Sendable {
             touchFolder(folder.parentID, at: date)
             return removedNotebooks
         }
+    }
+
+    /// Removes every item. An item inside a folder that is removed as well goes with that folder.
+    @discardableResult
+    public mutating func delete(_ items: [LibraryEntry.ID], at date: Date = .now) throws(LibraryError) -> Set<Notebook.ID> {
+        var draft = self
+        var removedNotebooks: Set<Notebook.ID> = []
+        for item in items where entry(item) == nil || draft.entry(item) != nil {
+            removedNotebooks.formUnion(try draft.delete(item, at: date))
+        }
+        self = draft
+        return removedNotebooks
     }
 
     public mutating func markNotebookModified(_ id: Notebook.ID, at date: Date = .now) {
