@@ -19,11 +19,11 @@ struct ToolOptions: View {
                 WidthChoices(selection: $settings.eraserWidth, isColumn: isColumn)
                 ToolBarSeparator(isAcross: isColumn)
                 Toggle(isOn: $settings.returnsAfterErasing) {
-                    Label("Switch Back", systemImage: "arrow.uturn.backward")
+                    Label("Auto Switch", systemImage: "arrow.uturn.backward")
                         .labelStyle(isColumn ? AnyLabelStyle(.iconOnly) : AnyLabelStyle(.titleAndIcon))
                 }
                 .toggleStyle(ToolBarToggleStyle())
-                .accessibilityLabel("Switch back after erasing")
+                .accessibilityLabel("Auto switch back after erasing")
             case .lasso:
                 EmptyView()
             }
