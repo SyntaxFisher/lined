@@ -59,35 +59,6 @@ nonisolated extension PKStroke: @retroactive InkStroke {
         }
     }
 
-    /// What remains of the stroke after an eraser of `radius` swept from `start` to `end`, in the
-    /// coordinates of the drawing, or `nil` when the eraser did not touch the stroke.
-    ///
-    /// The eraser takes the whole width of the line where it touches it, so the remaining pieces end
-    /// as cleanly as the line's own ends. Each piece is a new stroke with the same ink, transform and mask.
-    func erased(sweptFrom start: CGPoint, to end: CGPoint, radius: CGFloat) -> [PKStroke]? {
-        let sweep = CGRect(
-            x: min(start.x, end.x),
-            y: min(start.y, end.y),
-            width: abs(end.x - start.x),
-            height: abs(end.y - start.y)
-        ).insetBy(dx: -radius, dy: -radius)
-        guard renderBounds.intersects(sweep) else { return nil }
-        let points = Array(path.interpolatedPoints(by: .distance(1)))
-        let scale = hypot(transform.a, transform.b)
-        let line = points.map { point in
-            StrokeEraser.LinePoint(
-                location: point.location.applying(transform),
-                reach: max(point.size.width, point.size.height) / 2 * scale,
-                isErasable: mask?.contains(point.location) ?? true
-            )
-        }
-        guard let runs = StrokeEraser.remainingRuns(of: line, sweptFrom: start, to: end, radius: radius) else { return nil }
-        return runs.map { run in
-            let piece = PKStrokePath(controlPoints: points[run], creationDate: path.creationDate)
-            return PKStroke(ink: ink, path: piece, transform: transform, mask: mask, randomSeed: randomSeed)
-        }
-    }
-
     public func fingerprint(into hasher: inout Hasher, onPage page: CGAffineTransform) {
         let transformOnPage = transform.concatenating(page.inverted())
         hasher.combine(id)
@@ -148,5 +119,87 @@ extension InkColor {
 private extension ClosedRange<CGFloat> {
     func clamping(_ value: Double) -> CGFloat {
         Swift.min(Swift.max(CGFloat(value), lowerBound), upperBound)
+    }
+}
+
+extension PKStroke {
+    /// What remains of the stroke after an eraser of `radius` swept from `start` to `end`, in the
+    /// coordinates of the drawing, or `nil` when the eraser did not touch the stroke.
+    ///
+    /// The eraser touches a stroke when it covers a pixel of the stroke's ink as the screen shows it at
+    /// `pixelsPerPoint`. It then takes the touched piece out of the line, across its whole width and
+    /// one and a half times `radius` beyond on either side, so that a pass across a line cuts about twice
+    /// the eraser's diameter out of it. The remaining pieces end as cleanly as the line's own ends.
+    /// Each piece is a new stroke with the same ink, transform and mask.
+    func erased(sweptFrom start: CGPoint, to end: CGPoint, radius: CGFloat, pixelsPerPoint: CGFloat) -> [PKStroke]? {
+        let sweep = CGRect(
+            x: min(start.x, end.x),
+            y: min(start.y, end.y),
+            width: abs(end.x - start.x),
+            height: abs(end.y - start.y)
+        ).insetBy(dx: -radius, dy: -radius)
+        let area = renderBounds.intersection(sweep)
+        guard !area.isEmpty,
+              showsInk(in: area, withinDistance: radius, ofSweepFrom: start, to: end, pixelsPerPoint: pixelsPerPoint)
+        else { return nil }
+        let points = Array(path.interpolatedPoints(by: .distance(1)))
+        let scale = hypot(transform.a, transform.b)
+        let line = points.map { point in
+            StrokeEraser.LinePoint(
+                location: point.location.applying(transform),
+                reach: max(point.size.width, point.size.height) / 2 * scale,
+                isErasable: mask?.contains(point.location) ?? true
+            )
+        }
+        let runs = StrokeEraser.remainingRuns(of: line, touchedFrom: start, to: end, radius: radius, margin: radius * 1.5)
+        return runs.map { run in
+            let piece = PKStrokePath(controlPoints: points[run], creationDate: path.creationDate)
+            return PKStroke(ink: ink, path: piece, transform: transform, mask: mask, randomSeed: randomSeed)
+        }
+    }
+
+    /// Whether a pixel of the stroke's ink within `area` lies within `radius` of the sweep.
+    ///
+    /// The stroke is drawn to find out: the width PencilKit keeps for each point of a line is its widest,
+    /// which a pen pressed lightly does not fill.
+    private func showsInk(
+        in area: CGRect,
+        withinDistance radius: CGFloat,
+        ofSweepFrom start: CGPoint,
+        to end: CGPoint,
+        pixelsPerPoint: CGFloat
+    ) -> Bool {
+        guard let image = PKDrawing(strokes: [self]).image(from: area, scale: pixelsPerPoint).cgImage else { return false }
+        let width = image.width
+        let height = image.height
+        var coverage = [UInt8](repeating: 0, count: width * height)
+        let isDrawn = coverage.withUnsafeMutableBytes { buffer in
+            guard let context = CGContext(
+                data: buffer.baseAddress,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: width,
+                space: CGColorSpaceCreateDeviceGray(),
+                bitmapInfo: CGImageAlphaInfo.alphaOnly.rawValue
+            ) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard isDrawn else { return false }
+        let pointsPerPixelX = area.width / CGFloat(width)
+        let pointsPerPixelY = area.height / CGFloat(height)
+        for row in 0..<height {
+            for column in 0..<width where coverage[row * width + column] > 64 {
+                let pixel = CGPoint(
+                    x: area.minX + (CGFloat(column) + 0.5) * pointsPerPixelX,
+                    y: area.minY + (CGFloat(row) + 0.5) * pointsPerPixelY
+                )
+                if StrokeEraser.distance(from: pixel, toSegmentFrom: start, to: end) <= radius {
+                    return true
+                }
+            }
+        }
+        return false
     }
 }

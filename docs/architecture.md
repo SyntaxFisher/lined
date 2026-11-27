@@ -97,8 +97,10 @@ These properties of PencilKit shape the canvas:
 - A canvas draws a stroke it already shows again only when the stroke's identity changes. The parts
   of a split stroke are therefore new strokes.
 - PencilKit's erasers take whole strokes or leave slivers of a line beside their path. The canvas
-  therefore erases itself: it cuts what the eraser touches out of each stroke across the line's
-  whole width, and the remaining pieces become new strokes with round ends like the line's own.
+  therefore erases itself: once the eraser covers a pixel of a stroke's ink, it cuts a piece about
+  twice its own diameter out of the stroke across the line's whole width, and the remaining pieces
+  become new strokes with round ends like the line's own. Whether a pixel is covered is decided on
+  the drawn stroke, since the width PencilKit keeps for a point is the widest a pen can draw there.
 - PencilKit drops a lasso selection whenever its view is resized, so the canvas keeps its size when
   a keyboard appears.
 - PencilKit takes the focus while strokes are selected and accepts typed text there, which would

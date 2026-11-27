@@ -702,7 +702,7 @@ final class PagedCanvasView: UIView {
         var strokes: [PKStroke] = []
         var hasErasedHere = false
         for stroke in canvas.drawing.strokes {
-            if let remains = stroke.erased(sweptFrom: start, to: end, radius: radius) {
+            if let remains = stroke.erased(sweptFrom: start, to: end, radius: radius, pixelsPerPoint: min(pixelsPerPoint, 8)) {
                 strokes += remains
                 hasErasedHere = true
             } else {
