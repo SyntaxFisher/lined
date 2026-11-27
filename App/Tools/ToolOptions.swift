@@ -23,6 +23,10 @@ struct ToolOptions: View {
                 WidthChoices(selection: $settings.highlighterWidth, color: Color(settings.highlighterColor), isColumn: isColumn)
             case .eraser:
                 choices(ToolSettings.EraserMode.allCases, selection: $settings.eraserMode)
+                if settings.eraserMode == .precise {
+                    ToolBarSeparator(isAcross: isColumn)
+                    WidthChoices(selection: $settings.eraserWidth, color: .secondary, isColumn: isColumn)
+                }
                 ToolBarSeparator(isAcross: isColumn)
                 Toggle(isOn: $settings.returnsAfterErasing) {
                     Label("Switch Back", systemImage: "arrow.uturn.backward")

@@ -107,7 +107,8 @@ These properties of PencilKit shape the canvas:
 ## Tools
 
 `ToolSettings` in the model holds the selected tool and what each tool remembers: colour, width and
-style of the pen and the highlighter, and the mode of the eraser. The app maps it to PencilKit tools
+style of the pen and the highlighter, and the mode and width of the eraser. Only the precise eraser
+has a width: PencilKit's stroke eraser takes what it touches and ignores one. The app maps it to PencilKit tools
 in one place. The settings and the edge the tool bar is docked to are saved as preferences of the
 app, not of a notebook.
 

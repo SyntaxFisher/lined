@@ -109,7 +109,7 @@ extension ToolSettings {
         case .eraser:
             return switch eraserMode {
             case .stroke: PKEraserTool(.vector)
-            case .precise: PKEraserTool(.bitmap, width: ToolSettings.preciseEraserWidth * documentScale)
+            case .precise: PKEraserTool(.bitmap, width: preciseEraserLineWidth * documentScale)
             }
         case .lasso:
             return PKLassoTool()

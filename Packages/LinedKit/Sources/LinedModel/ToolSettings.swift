@@ -69,6 +69,8 @@ public struct ToolSettings: Codable, Equatable, Sendable {
     public var highlighterColor = InkColor.yellow
     public var highlighterWidth = StrokeWidth.medium
     public var eraserMode = EraserMode.stroke
+    /// How wide the precise eraser is. The stroke eraser takes what it touches and has no width.
+    public var eraserWidth = StrokeWidth.fine
     /// Whether the eraser hands over to the tool used before it once it has erased something.
     public var returnsAfterErasing = true
 
@@ -122,5 +124,11 @@ public struct ToolSettings: Codable, Equatable, Sendable {
     }
 
     /// The width of the trace the precise eraser removes, in page points.
-    public static let preciseEraserWidth: Double = 10
+    public var preciseEraserLineWidth: Double {
+        switch eraserWidth {
+        case .fine: 10
+        case .medium: 20
+        case .bold: 40
+        }
+    }
 }
