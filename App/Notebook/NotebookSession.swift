@@ -153,6 +153,16 @@ final class NotebookSession: NotebookHistory {
         canvas?.scroll(to: first.id, animated: true)
     }
 
+    /// Moves the pages in front of `successor`, or to the end when it is `nil`. The reader stays on their page.
+    func movePages(_ pageIDs: [Page.ID], before successor: Page.ID?) async {
+        let readerPageID = currentPage.id
+        var updated = document
+        updated.movePages(pageIDs, before: successor)
+        guard updated != document else { return }
+        await apply(updated)
+        currentPageIndex = updated.index(of: readerPageID) ?? currentPageIndex
+    }
+
     func deletePage(_ pageID: Page.ID) async {
         var updated = document
         guard (try? updated.removePage(pageID)) != nil else { return }

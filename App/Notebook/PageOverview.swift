@@ -1,7 +1,8 @@
 import LinedModel
 import SwiftUI
 
-/// All pages of a notebook as thumbnails, for jumping to a page, removing pages and adding pages at the end.
+/// All pages of a notebook as thumbnails, for jumping to a page, reordering and removing pages and
+/// adding pages at the end.
 struct PageOverview: View {
     let session: NotebookSession
 
@@ -14,7 +15,8 @@ struct PageOverview: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 24) {
-                        ForEach(Array(session.pages.enumerated()), id: \.element.id) { index, page in
+                        ForEach(session.pages) { page in
+                            let index = session.document.index(of: page.id) ?? 0
                             Button {
                                 session.showPage(page.id)
                                 dismiss()
@@ -35,6 +37,7 @@ struct PageOverview: View {
                             }
                             .id(page.id)
                         }
+                        .reorderable()
                         AddPageMenu(session: session, placement: .atEnd) {
                             NewPageCell(pageSize: session.pageBefore(.atEnd).successor().size)
                         }
@@ -42,6 +45,13 @@ struct PageOverview: View {
                         .id(Self.newPageID)
                     }
                     .padding(24)
+                    .reorderContainer(for: Page.self) { difference in
+                        let successor: Page.ID? = switch difference.destination.position {
+                        case .before(let pageID): pageID
+                        case .end: nil
+                        }
+                        Task { await session.movePages(difference.sources, before: successor) }
+                    }
                 }
                 .onAppear {
                     proxy.scrollTo(session.currentPage.id, anchor: .center)

@@ -52,6 +52,29 @@ struct NotebookDocumentTests {
         #expect(document.referencedPDFSources == [source])
     }
 
+    @Test func movesPagesInFrontOfAnotherPageOrToTheEnd() {
+        var document = NotebookDocument.paper(.blank, size: PageSize.a4(.portrait))
+        for index in 1..<5 {
+            document.insert(document.pages[0].successor(), at: index)
+        }
+        let ids = document.pages.map(\.id)
+
+        document.movePages([ids[3]], before: ids[1])
+        #expect(document.pages.map(\.id) == [ids[0], ids[3], ids[1], ids[2], ids[4]])
+
+        document.movePages([ids[0]], before: nil)
+        #expect(document.pages.map(\.id) == [ids[3], ids[1], ids[2], ids[4], ids[0]])
+
+        document.movePages([ids[4], ids[1]], before: ids[3])
+        #expect(document.pages.map(\.id) == [ids[1], ids[4], ids[3], ids[2], ids[0]])
+
+        document.movePages([ids[2], ids[3]], before: ids[3])
+        #expect(document.pages.map(\.id) == [ids[1], ids[4], ids[3], ids[2], ids[0]])
+
+        document.movePages([Page.ID()], before: ids[1])
+        #expect(document.pages.count == 5)
+    }
+
     @Test func keepsAtLeastOnePage() throws {
         var document = NotebookDocument.paper(.blank, size: PageSize.a4(.portrait))
         let first = document.pages[0]

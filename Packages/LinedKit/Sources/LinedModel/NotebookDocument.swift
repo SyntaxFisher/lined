@@ -48,6 +48,20 @@ public struct NotebookDocument: Equatable, Sendable {
         pages.insert(contentsOf: newPages, at: min(max(index, 0), pages.count))
     }
 
+    /// Moves the pages, keeping their order among themselves, in front of `successor` or to the end
+    /// when it is `nil`. A successor that moves too gives way to the first page after it that stays.
+    public mutating func movePages(_ pageIDs: [Page.ID], before successor: Page.ID?) {
+        let moving = Set(pageIDs)
+        let moved = pages.filter { moving.contains($0.id) }
+        var remaining = pages.filter { !moving.contains($0.id) }
+        let anchor = successor.flatMap(index(of:)).flatMap { start in
+            pages[start...].first { !moving.contains($0.id) }?.id
+        }
+        let destination = anchor.flatMap { id in remaining.firstIndex { $0.id == id } } ?? remaining.count
+        remaining.insert(contentsOf: moved, at: destination)
+        pages = remaining
+    }
+
     @discardableResult
     public mutating func removePage(_ pageID: Page.ID) throws(NotebookDocumentError) -> Page {
         guard let index = index(of: pageID) else { throw .pageNotFound }
