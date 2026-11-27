@@ -127,9 +127,10 @@ extension PKStroke {
     /// coordinates of the drawing, or `nil` when the eraser did not touch the stroke.
     ///
     /// The eraser touches a stroke when it covers a pixel of the stroke's ink as the screen shows it at
-    /// `pixelsPerPoint`. It then takes the touched piece out of the line, across its whole width and
-    /// one and a half times `radius` beyond on either side, so that a pass across a line cuts about twice
-    /// the eraser's diameter out of it. The remaining pieces end as cleanly as the line's own ends.
+    /// `pixelsPerPoint`. It then takes the touched piece out of the line, across its whole width and an
+    /// eighth of `radius` beyond on either side, so that a pass across a line cuts about the eraser's
+    /// diameter out of it and a light touch still leaves a visible gap. The remaining pieces end as
+    /// cleanly as the line's own ends.
     /// Each piece is a new stroke with the same ink, transform and mask.
     func erased(sweptFrom start: CGPoint, to end: CGPoint, radius: CGFloat, pixelsPerPoint: CGFloat) -> [PKStroke]? {
         let sweep = CGRect(
@@ -151,7 +152,7 @@ extension PKStroke {
                 isErasable: mask?.contains(point.location) ?? true
             )
         }
-        let runs = StrokeEraser.remainingRuns(of: line, touchedFrom: start, to: end, radius: radius, margin: radius * 1.5)
+        let runs = StrokeEraser.remainingRuns(of: line, touchedFrom: start, to: end, radius: radius, margin: radius / 8)
         return runs.map { run in
             let piece = PKStrokePath(controlPoints: points[run], creationDate: path.creationDate)
             return PKStroke(ink: ink, path: piece, transform: transform, mask: mask, randomSeed: randomSeed)
