@@ -33,20 +33,11 @@ public enum StrokeWidth: String, Codable, CaseIterable, Sendable {
 
 /// The tool in use and how each tool is set up.
 public struct ToolSettings: Codable, Equatable, Sendable {
-    public enum EraserMode: String, Codable, CaseIterable, Sendable {
-        /// Removes every stroke it touches.
-        case stroke
-        /// Removes only what it passes over.
-        case precise
-    }
-
     public private(set) var tool = DrawingTool.pen
     public private(set) var previousTool = DrawingTool.eraser
 
     public var penColor = InkColor.black
     public var penWidth = StrokeWidth.medium
-    public var eraserMode = EraserMode.stroke
-    /// How wide the precise eraser is. The stroke eraser takes what it touches and has no width.
     public var eraserWidth = StrokeWidth.fine
     /// Whether the eraser hands over to the tool used before it once it has erased something.
     public var returnsAfterErasing = true
@@ -88,8 +79,8 @@ public struct ToolSettings: Codable, Equatable, Sendable {
         }
     }
 
-    /// The diameter of the precise eraser in screen points. It erases as much of the screen at any zoom.
-    public var preciseEraserDiameter: Double {
+    /// The eraser's diameter in screen points. It erases as much of the screen at any zoom.
+    public var eraserDiameter: Double {
         switch eraserWidth {
         case .fine: 20
         case .medium: 40

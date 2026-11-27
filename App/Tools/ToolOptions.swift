@@ -16,11 +16,7 @@ struct ToolOptions: View {
                 ToolBarSeparator(isAcross: isColumn)
                 WidthChoices(selection: $settings.penWidth, isColumn: isColumn)
             case .eraser:
-                textChoices(ToolSettings.EraserMode.allCases, selection: $settings.eraserMode)
-                if settings.eraserMode == .precise {
-                    ToolBarSeparator(isAcross: isColumn)
-                    WidthChoices(selection: $settings.eraserWidth, isColumn: isColumn)
-                }
+                WidthChoices(selection: $settings.eraserWidth, isColumn: isColumn)
                 ToolBarSeparator(isAcross: isColumn)
                 Toggle(isOn: $settings.returnsAfterErasing) {
                     Label("Switch Back", systemImage: "arrow.uturn.backward")
@@ -30,31 +26,6 @@ struct ToolOptions: View {
                 .accessibilityLabel("Switch back after erasing")
             case .lasso:
                 EmptyView()
-            }
-        }
-    }
-
-    /// Choices named in words, for options whose difference a small icon does not show.
-    private func textChoices<Choice: TextChoice>(_ all: [Choice], selection: Binding<Choice>) -> some View {
-        let stack = isColumn ? AnyLayout(VStackLayout(spacing: 4)) : AnyLayout(HStackLayout(spacing: 4))
-        return stack {
-            ForEach(all, id: \.self) { choice in
-                let isSelected = choice == selection.wrappedValue
-                Button {
-                    selection.wrappedValue = choice
-                } label: {
-                    Text(choice.title)
-                        .font(isColumn ? .caption.weight(.semibold) : .subheadline.weight(.medium))
-                        .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
-                        .padding(.horizontal, isColumn ? 6 : 10)
-                        .frame(minWidth: 36, minHeight: 36)
-                        .background(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear), in: .capsule)
-                        .contentShape(.capsule)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(choice.displayName)
-                .accessibilityInputLabels([choice.title])
-                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
     }
@@ -139,28 +110,6 @@ private struct InkDot: View {
         Circle()
             .fill(color)
             .strokeBorder(.primary.opacity(0.25), lineWidth: 1)
-    }
-}
-
-/// A choice the tool bar offers as a word.
-private protocol TextChoice: Hashable {
-    var title: LocalizedStringKey { get }
-    var displayName: LocalizedStringKey { get }
-}
-
-extension ToolSettings.EraserMode: TextChoice {
-    fileprivate var title: LocalizedStringKey {
-        switch self {
-        case .stroke: "Stroke"
-        case .precise: "Pixel"
-        }
-    }
-
-    fileprivate var displayName: LocalizedStringKey {
-        switch self {
-        case .stroke: "Erase whole strokes"
-        case .precise: "Erase precisely"
-        }
     }
 }
 

@@ -157,7 +157,7 @@ final class PagedCanvasView: UIView {
         canvas.addSubview(desk)
         canvas.addInteraction(UIPencilInteraction(delegate: self))
         canvas.addGestureRecognizer(undoTap)
-        canvas.addGestureRecognizer(eraserFollower)
+        canvas.addGestureRecognizer(eraserGesture)
         addSubview(eraserIndicator)
 
         updateDeskColor()
@@ -643,33 +643,76 @@ final class PagedCanvasView: UIView {
 
     private func applyInput() {
         canvas.drawingPolicy = allowsFingerDrawing ? .anyInput : .pencilOnly
+        eraserGesture.allowedTouchTypes = allowsFingerDrawing
+            ? [UITouch.TouchType.pencil, .direct].map { NSNumber(value: $0.rawValue) }
+            : [NSNumber(value: UITouch.TouchType.pencil.rawValue)]
     }
 
     private func applyTool() {
-        canvas.tool = tools.pencilKitTool(documentScale: Self.documentScale)
+        if let tool = tools.pencilKitTool(documentScale: Self.documentScale) {
+            canvas.tool = tool
+        }
+        let isErasing = tools.tool == .eraser
+        canvas.drawingGestureRecognizer.isEnabled = !isErasing
+        eraserGesture.isEnabled = isErasing
         // A selection that the lasso leaves behind is put down when the tool changes.
         reportedInk = nil
         applySelectionGestures()
         eraserIndicator.hide()
     }
 
-    /// Shows the eraser under the touch that erases.
-    private lazy var eraserFollower: TouchFollower = {
-        let follower = TouchFollower()
-        follower.coordinateSpace = self
-        follower.shouldFollow = { [unowned self] touch in
-            tools.tool == .eraser && (touch.type == .pencil || allowsFingerDrawing)
-        }
-        follower.onChange = { [unowned self] point in
-            guard let point else { return eraserIndicator.hide() }
-            let diameter = switch tools.eraserMode {
-            case .stroke: EraserIndicator.strokeEraserDiameter
-            case .precise: CGFloat(tools.preciseEraserDiameter)
-            }
-            eraserIndicator.show(at: point, diameter: diameter)
-        }
-        return follower
+    // MARK: Erasing
+
+    /// The eraser cuts what it touches out of the strokes, across their whole width, where PencilKit's
+    /// erasers would take whole strokes or leave slivers of a line beside the eraser's path.
+    private lazy var eraserGesture: EraserGestureRecognizer = {
+        let gesture = EraserGestureRecognizer(target: self, action: #selector(followEraser(_:)))
+        gesture.delegate = self
+        return gesture
     }()
+
+    /// Where the eraser was when it last erased, in document points.
+    private var lastEraserLocation: CGPoint?
+
+    @objc private func followEraser(_ gesture: EraserGestureRecognizer) {
+        switch gesture.state {
+        case .began, .changed:
+            if gesture.state == .began {
+                isToolInUse = true
+                inkSettling?.cancel()
+                inkSettling = nil
+                hasErased = true
+                onToolBegin?()
+            }
+            eraserIndicator.show(at: gesture.location(in: self), diameter: tools.eraserDiameter)
+            let location = gesture.location(in: pagesView)
+            erase(from: lastEraserLocation ?? location, to: location)
+            lastEraserLocation = location
+        default:
+            eraserIndicator.hide()
+            lastEraserLocation = nil
+            isToolInUse = false
+            settleInk()
+        }
+    }
+
+    /// Erases what the eraser swept over between two places in document points.
+    private func erase(from start: CGPoint, to end: CGPoint) {
+        let radius = tools.eraserDiameter / 2 / canvas.zoomScale
+        var strokes: [PKStroke] = []
+        var hasErasedHere = false
+        for stroke in canvas.drawing.strokes {
+            if let remains = stroke.erased(sweptFrom: start, to: end, radius: radius) {
+                strokes += remains
+                hasErasedHere = true
+            } else {
+                strokes.append(stroke)
+            }
+        }
+        guard hasErasedHere else { return }
+        reportedInk = nil
+        canvas.drawing = PKDrawing(strokes: strokes)
+    }
 
     /// PencilKit selects strokes and opens its edit menu on a tap or a long press, whatever the
     /// tool. Here that belongs to the lasso; with the other tools a resting hand must do nothing.
@@ -788,7 +831,6 @@ extension PagedCanvasView: PKCanvasViewDelegate {
         isToolInUse = true
         inkSettling?.cancel()
         inkSettling = nil
-        hasErased = hasErased || canvasView.tool is PKEraserTool
         onToolBegin?()
     }
 
@@ -886,5 +928,15 @@ private final class InkCanvasView: PKCanvasView {
             recognizer !== drawingGestureRecognizer
                 && (recognizer is UITapGestureRecognizer || recognizer is UILongPressGestureRecognizer)
         }
+    }
+}
+
+extension PagedCanvasView: UIGestureRecognizerDelegate {
+    /// The eraser lets the canvas scroll and zoom, so that a second finger can take over from it.
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
+    ) -> Bool {
+        gestureRecognizer === eraserGesture && (other === canvas.panGestureRecognizer || other === canvas.pinchGestureRecognizer)
     }
 }

@@ -64,7 +64,7 @@ points per document point, and it ends at ten, which is as far as PencilKit magn
   pinch is in progress; what arrives meanwhile waits.
 - **Pages of strokes.** A stroke belongs to the page it starts on, or to the nearest page when it
   starts between two. Moving ink between page points and document points only changes a stroke's
-  transform, which scales its line along, so strokes keep their identity and their eraser masks.
+  transform, which scales its line along, so strokes keep their identity and their masks.
 - **Ink ends at the page.** A stroke that is drawn, moved or pasted across the edge of its page is
   split there once the tool has lifted: it becomes one stroke on each page it draws on, each with a
   mask that covers its line on that page, and what it draws beside the pages is dropped. The parts
@@ -96,8 +96,9 @@ These properties of PencilKit shape the canvas:
   pages whose ink it holds small.
 - A canvas draws a stroke it already shows again only when the stroke's identity changes. The parts
   of a split stroke are therefore new strokes.
-- The stroke eraser takes a stroke away wherever its mask is touched, not only near its line. A
-  mask therefore stays close to the line it shows.
+- PencilKit's erasers take whole strokes or leave slivers of a line beside their path. The canvas
+  therefore erases itself: it cuts what the eraser touches out of each stroke across the line's
+  whole width, and the remaining pieces become new strokes with round ends like the line's own.
 - PencilKit drops a lasso selection whenever its view is resized, so the canvas keeps its size when
   a keyboard appears.
 - PencilKit takes the focus while strokes are selected and accepts typed text there, which would
@@ -108,12 +109,11 @@ These properties of PencilKit shape the canvas:
 ## Tools
 
 `ToolSettings` in the model holds the selected tool and what each tool remembers: colour and width
-of the pen, and the mode and width of the eraser. The pen draws an even line.
-Only the precise eraser has a width: PencilKit's stroke eraser takes what it touches and ignores one.
-PencilKit sizes the precise eraser in screen points, so it erases as much of the screen at any zoom.
-The app maps the settings to PencilKit tools in one place. While the eraser is down, `EraserIndicator`
-outlines it under the touch: in its size for the precise eraser, as a small ring for the stroke eraser. The settings and the edge the tool bar is docked to are saved as preferences of the
-app, not of a notebook.
+of the pen, and the width of the eraser. The pen draws an even line. The eraser's size is in screen
+points, so it erases as much of the screen at any zoom; `StrokeEraser` in `LinedInk` decides which
+points of a line it sweeps over, and `EraserIndicator` outlines it under the touch. The app maps the
+settings to PencilKit tools in one place. The settings and the edge the tool bar is docked to are
+saved as preferences of the app, not of a notebook.
 
 `FloatingToolBar` replaces the system tool picker. It floats above the canvas, unfolds the options
 of the selected tool in place and can be dragged to any edge of the screen; `DockEdge` picks the edge

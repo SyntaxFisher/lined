@@ -25,9 +25,6 @@ nonisolated extension PKStroke: @retroactive InkStroke {
     /// A stroke is cut with its mask, which PencilKit keeps in the coordinates of the stroke's path.
     /// The rest of the stroke still has the whole path, and starts where its path enters the mask.
     ///
-    /// The mask hugs the line: the stroke eraser takes a stroke away wherever its mask is touched,
-    /// so a mask in the shape of the whole page would let a tap anywhere on the page erase it.
-    ///
     /// The cut stroke is a new stroke with an identity of its own: a canvas draws a stroke it
     /// already shows again only when the stroke's identity changes.
     public func clipped(to rect: CGRect) -> PKStroke? {
@@ -62,6 +59,35 @@ nonisolated extension PKStroke: @retroactive InkStroke {
         }
     }
 
+    /// What remains of the stroke after an eraser of `radius` swept from `start` to `end`, in the
+    /// coordinates of the drawing, or `nil` when the eraser did not touch the stroke.
+    ///
+    /// The eraser takes the whole width of the line where it touches it, so the remaining pieces end
+    /// as cleanly as the line's own ends. Each piece is a new stroke with the same ink, transform and mask.
+    func erased(sweptFrom start: CGPoint, to end: CGPoint, radius: CGFloat) -> [PKStroke]? {
+        let sweep = CGRect(
+            x: min(start.x, end.x),
+            y: min(start.y, end.y),
+            width: abs(end.x - start.x),
+            height: abs(end.y - start.y)
+        ).insetBy(dx: -radius, dy: -radius)
+        guard renderBounds.intersects(sweep) else { return nil }
+        let points = Array(path.interpolatedPoints(by: .distance(1)))
+        let scale = hypot(transform.a, transform.b)
+        let line = points.map { point in
+            StrokeEraser.LinePoint(
+                location: point.location.applying(transform),
+                reach: max(point.size.width, point.size.height) / 2 * scale,
+                isErasable: mask?.contains(point.location) ?? true
+            )
+        }
+        guard let runs = StrokeEraser.remainingRuns(of: line, sweptFrom: start, to: end, radius: radius) else { return nil }
+        return runs.map { run in
+            let piece = PKStrokePath(controlPoints: points[run], creationDate: path.creationDate)
+            return PKStroke(ink: ink, path: piece, transform: transform, mask: mask, randomSeed: randomSeed)
+        }
+    }
+
     public func fingerprint(into hasher: inout Hasher, onPage page: CGAffineTransform) {
         let transformOnPage = transform.concatenating(page.inverted())
         hasher.combine(id)
@@ -75,7 +101,7 @@ nonisolated extension PKStroke: @retroactive InkStroke {
         for value in [transformOnPage.a, transformOnPage.b, transformOnPage.c, transformOnPage.d] {
             hasher.combine((value * 1_000_000).rounded())
         }
-        // The precise eraser leaves a stroke's path alone and cuts into its mask.
+        // A stroke cut at the edge of a page keeps its path and differs in its mask.
         mask?.cgPath.applyWithBlock { element in
             let pointCount = switch element.pointee.type {
             case .moveToPoint, .addLineToPoint: 1
@@ -92,24 +118,22 @@ nonisolated extension PKStroke: @retroactive InkStroke {
 }
 
 extension ToolSettings {
-    /// The tool as PencilKit applies it on a canvas that draws in document points.
+    /// The tool as PencilKit applies it on a canvas that draws in document points, or `nil` for the
+    /// eraser, which the canvas works itself.
     ///
     /// - Parameter documentScale: Document points per page point. The settings give widths in page points.
-    func pencilKitTool(documentScale: CGFloat) -> any PKTool {
+    func pencilKitTool(documentScale: CGFloat) -> (any PKTool)? {
         switch tool {
         case .pen:
-            return PKInkingTool(
+            PKInkingTool(
                 .monoline,
                 color: penColor.uiColor,
                 width: PKInkingTool.InkType.monoline.validWidthRange.clamping(penLineWidth * documentScale)
             )
         case .eraser:
-            return switch eraserMode {
-            case .stroke: PKEraserTool(.vector)
-            case .precise: PKEraserTool(.bitmap, width: preciseEraserDiameter)
-            }
+            nil
         case .lasso:
-            return PKLassoTool()
+            PKLassoTool()
         }
     }
 }

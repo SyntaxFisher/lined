@@ -2,9 +2,6 @@ import UIKit
 
 /// The outline of the eraser under the pencil while it erases, so that it is clear what it takes.
 final class EraserIndicator: UIView {
-    /// The diameter in screen points for an eraser that takes whole strokes, which has no width of its own.
-    static let strokeEraserDiameter: CGFloat = 14
-
     private let outline = CAShapeLayer()
     private let halo = CAShapeLayer()
 
@@ -46,64 +43,55 @@ final class EraserIndicator: UIView {
     }
 }
 
-/// Follows a single touch on a view without taking part in its gestures.
-final class TouchFollower: UIGestureRecognizer, UIGestureRecognizerDelegate {
-    /// Called with the touch's place in `coordinateSpace` as it moves, and with `nil` once it is gone.
-    var onChange: ((CGPoint?) -> Void)?
-    /// Whether a touch that begins is one to follow.
-    var shouldFollow: (UITouch) -> Bool = { _ in true }
-    weak var coordinateSpace: UIView?
+/// Takes the eraser's touch on the canvas from the moment it lands, so that erasing starts at once.
+///
+/// One pencil or finger erases. A second finger hands the touch over to scrolling and zooming; while a
+/// pencil erases, a resting hand does nothing.
+final class EraserGestureRecognizer: UIGestureRecognizer {
+    private var eraser: UITouch?
 
-    private var followed: UITouch?
-
-    init() {
-        super.init(target: nil, action: nil)
-        cancelsTouchesInView = false
+    override init(target: Any?, action: Selector?) {
+        super.init(target: target, action: action)
         delaysTouchesBegan = false
         delaysTouchesEnded = false
-        delegate = self
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
-        guard followed == nil, touches.count == 1, let touch = touches.first, shouldFollow(touch) else {
-            stopFollowing()
+        if let eraser {
+            if eraser.type == .direct {
+                state = .cancelled
+            } else {
+                touches.forEach { ignore($0, for: event) }
+            }
             return
         }
-        followed = touch
-        report(touch, in: event)
+        guard touches.count == 1, let touch = touches.first else {
+            state = .failed
+            return
+        }
+        eraser = touch
+        state = .began
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
-        if let followed, touches.contains(followed) {
-            report(followed, in: event)
+        if let eraser, touches.contains(eraser) {
+            state = .changed
         }
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
-        stopFollowing()
+        if let eraser, touches.contains(eraser) {
+            state = .ended
+        }
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
-        stopFollowing()
+        if let eraser, touches.contains(eraser) {
+            state = .cancelled
+        }
     }
 
     override func reset() {
-        followed = nil
-    }
-
-    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-        true
-    }
-
-    /// Reports where the touch is about to be, as PencilKit draws there too.
-    private func report(_ touch: UITouch, in event: UIEvent) {
-        let latest = event.predictedTouches(for: touch)?.last ?? touch
-        onChange?(latest.location(in: coordinateSpace ?? view))
-    }
-
-    private func stopFollowing() {
-        followed = nil
-        onChange?(nil)
-        state = .failed
+        eraser = nil
     }
 }

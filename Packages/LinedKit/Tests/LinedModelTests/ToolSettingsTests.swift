@@ -72,7 +72,7 @@ struct ToolSettingsTests {
         #expect(penWidths == penWidths.sorted() && Set(penWidths).count == penWidths.count)
         let eraserWidths = StrokeWidth.allCases.map { width in
             settings.eraserWidth = width
-            return settings.preciseEraserDiameter
+            return settings.eraserDiameter
         }
         #expect(eraserWidths == eraserWidths.sorted() && Set(eraserWidths).count == eraserWidths.count)
     }
@@ -89,7 +89,7 @@ struct ToolSettingsTests {
         settings.select(.lasso)
         settings.penColor = .blue
         settings.penWidth = .bold
-        settings.eraserMode = .precise
+        settings.eraserWidth = .bold
         settings.returnsAfterErasing = false
 
         let read = try JSONDecoder().decode(ToolSettings.self, from: JSONEncoder().encode(settings))
