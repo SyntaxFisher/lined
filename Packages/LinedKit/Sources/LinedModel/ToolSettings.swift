@@ -112,12 +112,12 @@ public struct ToolSettings: Codable, Equatable, Sendable {
         }
     }
 
-    /// The width of the trace the precise eraser removes, in page points.
-    public var preciseEraserLineWidth: Double {
+    /// The diameter of the precise eraser in screen points. It erases as much of the screen at any zoom.
+    public var preciseEraserDiameter: Double {
         switch eraserWidth {
-        case .fine: 10
-        case .medium: 20
-        case .bold: 40
+        case .fine: 20
+        case .medium: 40
+        case .bold: 80
         }
     }
 }

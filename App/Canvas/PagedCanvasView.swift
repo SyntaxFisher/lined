@@ -102,6 +102,7 @@ final class PagedCanvasView: UIView {
     /// Holds the page backgrounds beneath the ink, laid out in document points.
     private let pagesView = UIView()
     private let desk = DeskView()
+    private let eraserIndicator = EraserIndicator()
     private let renderPool = BackgroundRenderPool()
 
     private var pages: [Page] = []
@@ -156,6 +157,8 @@ final class PagedCanvasView: UIView {
         canvas.addSubview(desk)
         canvas.addInteraction(UIPencilInteraction(delegate: self))
         canvas.addGestureRecognizer(undoTap)
+        canvas.addGestureRecognizer(eraserFollower)
+        addSubview(eraserIndicator)
 
         updateDeskColor()
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, _) in self.updateDeskColor() }
@@ -647,7 +650,26 @@ final class PagedCanvasView: UIView {
         // A selection that the lasso leaves behind is put down when the tool changes.
         reportedInk = nil
         applySelectionGestures()
+        eraserIndicator.hide()
     }
+
+    /// Shows the eraser under the touch that erases.
+    private lazy var eraserFollower: TouchFollower = {
+        let follower = TouchFollower()
+        follower.coordinateSpace = self
+        follower.shouldFollow = { [unowned self] touch in
+            tools.tool == .eraser && (touch.type == .pencil || allowsFingerDrawing)
+        }
+        follower.onChange = { [unowned self] point in
+            guard let point else { return eraserIndicator.hide() }
+            let diameter = switch tools.eraserMode {
+            case .stroke: EraserIndicator.strokeEraserDiameter
+            case .precise: CGFloat(tools.preciseEraserDiameter)
+            }
+            eraserIndicator.show(at: point, diameter: diameter)
+        }
+        return follower
+    }()
 
     /// PencilKit selects strokes and opens its edit menu on a tap or a long press, whatever the
     /// tool. Here that belongs to the lasso; with the other tools a resting hand must do nothing.

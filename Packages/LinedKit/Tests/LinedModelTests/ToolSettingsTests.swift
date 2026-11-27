@@ -77,7 +77,7 @@ struct ToolSettingsTests {
         #expect(highlighterWidths == highlighterWidths.sorted() && Set(highlighterWidths).count == highlighterWidths.count)
         let eraserWidths = StrokeWidth.allCases.map { width in
             settings.eraserWidth = width
-            return settings.preciseEraserLineWidth
+            return settings.preciseEraserDiameter
         }
         #expect(eraserWidths == eraserWidths.sorted() && Set(eraserWidths).count == eraserWidths.count)
     }
