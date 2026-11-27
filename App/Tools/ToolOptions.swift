@@ -14,16 +14,16 @@ struct ToolOptions: View {
             case .pen:
                 ColorChoices(colors: InkColor.penPalette, selection: $settings.penColor, isColumn: isColumn)
                 ToolBarSeparator(isAcross: isColumn)
-                WidthChoices(selection: $settings.penWidth, color: Color(settings.penColor), isColumn: isColumn)
+                WidthChoices(selection: $settings.penWidth, isColumn: isColumn)
             case .highlighter:
                 ColorChoices(colors: InkColor.highlighterPalette, selection: $settings.highlighterColor, isColumn: isColumn)
                 ToolBarSeparator(isAcross: isColumn)
-                WidthChoices(selection: $settings.highlighterWidth, color: Color(settings.highlighterColor), isColumn: isColumn)
+                WidthChoices(selection: $settings.highlighterWidth, isColumn: isColumn)
             case .eraser:
                 textChoices(ToolSettings.EraserMode.allCases, selection: $settings.eraserMode)
                 if settings.eraserMode == .precise {
                     ToolBarSeparator(isAcross: isColumn)
-                    WidthChoices(selection: $settings.eraserWidth, color: .secondary, isColumn: isColumn)
+                    WidthChoices(selection: $settings.eraserWidth, isColumn: isColumn)
                 }
                 ToolBarSeparator(isAcross: isColumn)
                 Toggle(isOn: $settings.returnsAfterErasing) {
@@ -105,8 +105,6 @@ private struct ColorChoices: View {
 
 private struct WidthChoices: View {
     @Binding var selection: StrokeWidth
-    /// The colour the tool writes in.
-    let color: Color
     let isColumn: Bool
 
     var body: some View {
@@ -116,7 +114,10 @@ private struct WidthChoices: View {
                 Button {
                     selection = width
                 } label: {
-                    InkDot(color: color)
+                    // Not in the ink colour, which the colours beside it show and which can vanish on the dark bar.
+                    // The bar's glass draws `Color.primary` faintly; the label colour keeps its full contrast.
+                    Circle()
+                        .fill(Color(uiColor: .label))
                         .frame(width: width.dotDiameter, height: width.dotDiameter)
                         .frame(width: 32, height: 32)
                         .overlay {
