@@ -41,6 +41,7 @@ private struct NotebookEditor: View {
     @Bindable var session: NotebookSession
 
     @Environment(LibraryModel.self) private var library
+    @Environment(LibraryNavigator.self) private var navigator
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(Preference.allowsFingerDrawing) private var allowsFingerDrawing = Preference.allowsFingerDrawingByDefault
     @State private var isShowingPages = false
@@ -97,6 +98,14 @@ private struct NotebookEditor: View {
                 Button("OK") {}
             } message: {
                 Text(session.failureMessage ?? "")
+            }
+            .onChange(of: navigator.pdfsForOpenNotebook, initial: true) { _, urls in
+                guard !urls.isEmpty else { return }
+                navigator.pdfsForOpenNotebook = []
+                Task {
+                    await session.importPDFs(from: urls)
+                    urls.forEach(SharedPDF.discard)
+                }
             }
             .onChange(of: scenePhase) { _, phase in
                 if phase != .active {

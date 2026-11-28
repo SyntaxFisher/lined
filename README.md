@@ -9,6 +9,7 @@ Lined is in early development and not available yet.
 
 - A library with nested folders and notebook covers. Drag notebooks and folders into folders, or select several to move or delete them at once.
 - A4 notebooks on blank, lined, squared or dotted paper, and notebooks made from imported PDFs.
+- PDFs shared from other apps through the share sheet, as a new notebook or added to the open one.
 - Pages added after the current one or at the end of the page overview, on any paper or from a PDF, and rearranged by dragging them in the overview.
 - Handwriting with Apple Pencil on every page, sharp at any zoom, saved as you write.
 - A fineliner pen, an eraser and a lasso in a tool bar that docks to any edge of the screen.
