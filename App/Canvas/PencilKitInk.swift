@@ -88,6 +88,29 @@ nonisolated extension PKStroke: @retroactive InkStroke {
     }
 }
 
+extension PKStroke {
+    /// The stroke that draws a shape with the even line of a pen, as if the pen had drawn it.
+    ///
+    /// - Parameter pointSpacing: How far apart the points of the stroke's path lie at most.
+    init(_ shape: RecognizedShape, drawnWith pen: PKInkingTool, pointSpacing: CGFloat) {
+        // PencilKit keeps a point two wider than the tool that drew it.
+        let size = pen.width + 2
+        let points = shape.splineControlPoints(spacing: pointSpacing).enumerated().map { index, location in
+            PKStrokePoint(
+                location: location,
+                timeOffset: TimeInterval(index) * 0.005,
+                size: CGSize(width: size, height: size),
+                opacity: 1,
+                force: 0,
+                azimuth: 0,
+                altitude: .pi / 2,
+                secondaryScale: 0.32
+            )
+        }
+        self.init(ink: pen.ink, path: PKStrokePath(controlPoints: points, creationDate: Date()))
+    }
+}
+
 extension ToolSettings {
     /// The tool as PencilKit applies it on a canvas that draws in document points, or `nil` for the
     /// eraser, which the canvas works itself.

@@ -152,6 +152,7 @@ final class PagedCanvasView: UIView {
         canvas.addInteraction(UIPencilInteraction(delegate: self))
         canvas.addGestureRecognizer(undoTap)
         canvas.addGestureRecognizer(eraserGesture)
+        canvas.addGestureRecognizer(penHold)
         addSubview(eraserIndicator)
 
         updateDeskColor()
@@ -643,11 +644,14 @@ final class PagedCanvasView: UIView {
     private func applyInput() {
         #if targetEnvironment(simulator)
         canvas.drawingPolicy = .anyInput
-        eraserGesture.allowedTouchTypes = [UITouch.TouchType.pencil, .direct].map { NSNumber(value: $0.rawValue) }
+        let writing = [UITouch.TouchType.pencil, .direct]
         #else
         canvas.drawingPolicy = .pencilOnly
-        eraserGesture.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.pencil.rawValue)]
+        let writing = [UITouch.TouchType.pencil]
         #endif
+        for gesture in [eraserGesture, penHold] {
+            gesture.allowedTouchTypes = writing.map { NSNumber(value: $0.rawValue) }
+        }
     }
 
     private func applyTool() {
@@ -657,6 +661,7 @@ final class PagedCanvasView: UIView {
         let isErasing = tools.tool == .eraser
         canvas.drawingGestureRecognizer.isEnabled = !isErasing
         eraserGesture.isEnabled = isErasing
+        penHold.isEnabled = tools.tool == .pen
         if isErasing {
             strokePoints.prepare(for: canvas.drawing.strokes)
         }
@@ -664,6 +669,43 @@ final class PagedCanvasView: UIView {
         reportedInk = nil
         applySelectionGestures()
         eraserIndicator.hide()
+    }
+
+    // MARK: Shapes
+
+    /// A line shorter than this on the screen is writing, not a shape.
+    private static let shortestShape: CGFloat = 40
+    /// How far apart the points lie that a shape's line is made of, in document points.
+    private static let shapePointSpacing: CGFloat = 4
+
+    private lazy var penHold = PenHoldGestureRecognizer(coordinates: pagesView) { [weak self] line in
+        self?.snapToShape(line) ?? false
+    }
+
+    /// Replaces the line that the pen is drawing with the shape it comes closest to, if it is close
+    /// to one. The pen's stroke ends there, and the shape is a stroke as if the pen had drawn it.
+    ///
+    /// - Parameter line: The line so far, in document points.
+    /// - Returns: Whether the line became a shape.
+    func snapToShape(_ line: [CGPoint]) -> Bool {
+        let length = zip(line, line.dropFirst()).reduce(0) { $0 + hypot($1.1.x - $1.0.x, $1.1.y - $1.0.y) }
+        guard isToolInUse, length * canvas.zoomScale >= Self.shortestShape,
+              let pen = canvas.tool as? PKInkingTool,
+              let shape = ShapeRecognizer.shape(for: line)
+        else { return false }
+
+        // A stroke whose gesture is switched off ends without leaving a trace in the ink.
+        canvas.drawingGestureRecognizer.isEnabled = false
+        canvas.drawingGestureRecognizer.isEnabled = true
+        isToolInUse = false
+
+        var drawing = canvas.drawing
+        drawing.strokes.append(PKStroke(shape, drawnWith: pen, pointSpacing: Self.shapePointSpacing))
+        canvas.drawing = drawing
+        if let end = line.last {
+            UICanvasFeedbackGenerator(view: canvas).alignmentOccurred(at: pagesView.convert(end, to: canvas))
+        }
+        return true
     }
 
     // MARK: Erasing

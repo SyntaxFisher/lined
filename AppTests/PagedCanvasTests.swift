@@ -119,6 +119,50 @@ struct PagedCanvasTests {
         #expect(abs(background.frame.width - first.width) < 0.01 && abs(background.frame.minY - first.minY) < 0.5)
     }
 
+    @Test func aHeldLineBecomesItsShapeInOneStep() async throws {
+        let canvas = try await CanvasHarness()
+        defer { canvas.close() }
+        let first = canvas.layout.frame(ofPageAt: 0)
+        let center = CGPoint(x: first.midX, y: first.minY + 400)
+        let wobblyCircle = (0...80).map { step in
+            let angle = 2.02 * CGFloat.pi * CGFloat(step) / 80
+            let radius = 150 + 6 * sin(angle * 5)
+            return CGPoint(x: center.x + radius * cos(angle), y: center.y + radius * sin(angle))
+        }
+
+        canvas.view.canvasViewDidBeginUsingTool(canvas.canvas)
+        #expect(canvas.view.snapToShape(wobblyCircle))
+        try await canvas.settle()
+
+        let shown = canvas.canvas.drawing
+        #expect(shown.strokes.count == 1)
+        let ring = try #require(shown.strokes.first).renderBounds
+        #expect(abs(ring.width - ring.height) < 1)
+        #expect(abs(ring.midX - center.x) < 10 && abs(ring.midY - center.y) < 10)
+        // The canvas draws the ring, and its middle stays empty.
+        #expect(shown.inkedPixels(in: ring) > 500)
+        #expect(shown.inkedPixels(in: ring.insetBy(dx: 60, dy: 60)) == 0)
+        #expect(canvas.reports.count == 1)
+        #expect(canvas.reports.first?.first?.after.count == 1)
+    }
+
+    @Test func aHeldLineThatIsNoShapeStaysWithThePen() async throws {
+        let canvas = try await CanvasHarness()
+        defer { canvas.close() }
+        let first = canvas.layout.frame(ofPageAt: 0)
+        let wave = (0...200).map { CGPoint(x: first.minX + 100 + CGFloat($0) * 3, y: first.minY + 300 + 80 * sin(CGFloat($0) / 8)) }
+        let dash = [CGPoint(x: first.minX + 100, y: first.minY + 100), CGPoint(x: first.minX + 110, y: first.minY + 100)]
+
+        canvas.view.canvasViewDidBeginUsingTool(canvas.canvas)
+        #expect(!canvas.view.snapToShape(wave))
+        #expect(!canvas.view.snapToShape(dash))
+        canvas.view.canvasViewDidEndUsingTool(canvas.canvas)
+        try await canvas.settle()
+
+        #expect(canvas.canvas.drawing.strokes.isEmpty)
+        #expect(canvas.reports.isEmpty)
+    }
+
     @Test func strokesOnOnePageAreOneStepEach() async throws {
         let canvas = try await CanvasHarness()
         defer { canvas.close() }

@@ -11,7 +11,7 @@ UIKit lives in a local Swift package, `Packages/LinedKit`, and is tested on the 
 | `LinedStorage` | Reads and writes the library and notebook packages on disk. | `LinedModel` |
 | `LinedRendering` | Draws page backgrounds, paper and PDF, into bitmaps. | `LinedModel`, CoreGraphics |
 | `LinedLayout` | Geometry of the canvas: page stack, render planning, tool bar docking. | CoreGraphics |
-| `LinedInk` | Which page a stroke belongs to, which pages changed, and the undo history. | `LinedLayout` |
+| `LinedInk` | Which page a stroke belongs to, which pages changed, the undo history, and which shape a drawn line stands for. | `LinedLayout` |
 | App target | Interface, PencilKit, and the wiring between the modules. | all of the above |
 
 Dependencies point from the app to the package and never back. The package targets compile for
@@ -128,6 +128,23 @@ of the selected tool in place and can be dragged to any edge of the screen; `Doc
 nearest to where the bar is let go. The bar mostly floats over paper, which stays light, so in dark
 mode its glass is darkened until its light icons and the colours of dark ink stand out. A double
 tap on Apple Pencil does what the user chose in the system settings.
+
+## Shapes
+
+A line that the pen draws and then holds still at its end for half a second becomes the shape it
+comes closest to. `ShapeRecognizer` in `LinedInk` decides which: a straight line, a few straight
+sides through corners, an ellipse or a polygon, with circles, rectangles and squares recognised as
+such and nearly horizontal or vertical sides made exactly so. A line that follows none of these
+closely stays as it was drawn, and so does one too short to be more than writing.
+
+`PenHoldGestureRecognizer` watches the pen beside PencilKit's own drawing gesture without ever
+recognising, so the touch stays with PencilKit. When a held line is a shape, the canvas switches
+PencilKit's drawing gesture off and on again, which ends the stroke under the pen without leaving it
+in the ink, and adds the shape as a stroke of the pen's ink and width. From there it is ink like any
+other: one step to undo, split at the edge of its page, erased and selected like a drawn stroke.
+
+The path of a stroke is a uniform cubic spline. The shape's stroke has control points a few points
+apart along its outline and three in each corner, where the spline then turns sharply.
 
 ## Undo
 
