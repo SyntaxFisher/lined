@@ -134,8 +134,9 @@ tap on Apple Pencil does what the user chose in the system settings.
 A line that the pen draws and then holds still at its end for half a second becomes the shape it
 comes closest to. `ShapeRecognizer` in `LinedInk` decides which: a straight line, a few straight
 sides through corners, an ellipse or a polygon, with circles, rectangles and squares recognised as
-such and nearly horizontal or vertical sides made exactly so. A line that follows none of these
-closely stays as it was drawn, and so does one too short to be more than writing.
+such and nearly horizontal or vertical sides made exactly so. A closed line is a polygon only if
+its sides are straight; a round line, however uneven, is an ellipse. A line that follows none of
+these closely stays as it was drawn, and so does one too short to be more than writing.
 
 `PenHoldGestureRecognizer` watches the pen beside PencilKit's own drawing gesture without ever
 recognising, so the touch stays with PencilKit. When a held line is a shape, the canvas switches
@@ -143,8 +144,22 @@ PencilKit's drawing gesture off and on again, which ends the stroke under the pe
 in the ink, and adds the shape as a stroke of the pen's ink and width. From there it is ink like any
 other: one step to undo, split at the edge of its page, erased and selected like a drawn stroke.
 
+While the pen stays down after the shape has snapped, it pulls at the shape: the shape turns and
+grows about its anchor, the start of an open line or the middle of a closed shape, so that it
+follows the pen. Each move replaces the shape's stroke; the step to undo is the shape as the pen
+leaves it.
+
 The path of a stroke is a uniform cubic spline. The shape's stroke has control points a few points
-apart along its outline and three in each corner, where the spline then turns sharply.
+apart along its outline and three in each corner, where the spline then turns sharply. An ellipse
+has at least 72 points however small it is; with fewer, the ends of the spline stand out of the line.
+
+Nothing but the stroke is stored for a shape. `RecognizedShape` reads a shape back from the control
+points of a stroke, which only a stroke made from a shape has in that form and only while it is
+whole: one that was cut by the eraser or at the edge of a page is plain ink. A tap of the pen on the
+line of such a stroke shows its handles in `ShapeHandlesView`, a knob on each corner or on the ends
+of an ellipse's axes, above the canvas. Dragging a knob replaces the stroke with the changed shape,
+as one step to undo. PencilKit draws a dot for the tap, which the canvas takes out again. The handles
+go when the pen draws, erases or changes the tool.
 
 ## Undo
 

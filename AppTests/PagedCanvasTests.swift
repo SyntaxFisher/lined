@@ -132,6 +132,10 @@ struct PagedCanvasTests {
 
         canvas.view.canvasViewDidBeginUsingTool(canvas.canvas)
         #expect(canvas.view.snapToShape(wobblyCircle))
+        // The shape is in the pen's hand until the pen lifts, and no step before that.
+        try await canvas.settle()
+        #expect(canvas.reports.isEmpty)
+        canvas.view.releaseShape()
         try await canvas.settle()
 
         let shown = canvas.canvas.drawing
@@ -144,6 +148,73 @@ struct PagedCanvasTests {
         #expect(shown.inkedPixels(in: ring.insetBy(dx: 60, dy: 60)) == 0)
         #expect(canvas.reports.count == 1)
         #expect(canvas.reports.first?.first?.after.count == 1)
+    }
+
+    @Test func aShapeFollowsThePenThatHoldsItAndIsOneStep() async throws {
+        let canvas = try await CanvasHarness()
+        defer { canvas.close() }
+        let first = canvas.layout.frame(ofPageAt: 0)
+        let start = CGPoint(x: first.minX + 100, y: first.minY + 300)
+        let line = (0...50).map { CGPoint(x: start.x + CGFloat($0) * 6, y: start.y + 3 * sin(CGFloat($0) / 4)) }
+
+        canvas.view.canvasViewDidBeginUsingTool(canvas.canvas)
+        #expect(canvas.view.snapToShape(line))
+        let end = try #require(line.last)
+        canvas.view.pullShape(from: end, to: CGPoint(x: start.x + 150, y: start.y + 150))
+        canvas.view.pullShape(from: end, to: CGPoint(x: start.x, y: start.y + 500))
+        canvas.view.releaseShape()
+        try await canvas.settle()
+
+        let shown = canvas.canvas.drawing
+        #expect(shown.strokes.count == 1)
+        let bounds = try #require(shown.strokes.first).renderBounds
+        #expect(bounds.width < 10)
+        #expect(abs(bounds.minY - start.y) < 5 && abs(bounds.maxY - (start.y + 500)) < 5)
+        #expect(shown.inkedPixels(in: bounds) > 300)
+        #expect(canvas.reports.count == 1)
+    }
+
+    @Test func aTappedShapeIsChangedByItsHandlesInOneStep() async throws {
+        let canvas = try await CanvasHarness()
+        defer { canvas.close() }
+        let first = canvas.layout.frame(ofPageAt: 0)
+        let corners = [CGPoint(x: 200, y: 200), CGPoint(x: 500, y: 200), CGPoint(x: 350, y: 450)].map { CGPoint(x: first.minX + $0.x, y: first.minY + $0.y) }
+        let triangle = PKStroke(.polyline(corners: corners, isClosed: true), ink: PKInk(.monoline, color: .black), pointSize: 3, pointSpacing: 4)
+        try await canvas.draw(triangle)
+        try await canvas.draw(.line(from: CGPoint(x: first.minX + 100, y: first.minY + 700), to: CGPoint(x: first.minX + 300, y: first.minY + 760)))
+
+        // Neither a stroke drawn by hand nor the empty middle of the shape is taken hold of.
+        #expect(!canvas.view.selectShape(at: CGPoint(x: first.minX + 200, y: first.minY + 730)))
+        #expect(!canvas.view.selectShape(at: CGPoint(x: first.minX + 350, y: first.minY + 290)))
+        #expect(canvas.view.selectShape(at: CGPoint(x: first.minX + 350, y: first.minY + 203)))
+
+        canvas.view.moveShapeHandle(at: 2, to: CGPoint(x: first.minX + 350, y: first.minY + 600))
+        try await canvas.settle()
+
+        let shown = canvas.canvas.drawing
+        #expect(shown.strokes.count == 2)
+        #expect(abs(shown.strokes[0].renderBounds.maxY - (first.minY + 600)) < 5)
+        #expect(shown.strokes[0].shape == .polyline(corners: [corners[0], corners[1], CGPoint(x: first.minX + 350, y: first.minY + 600)], isClosed: true))
+        #expect(canvas.reports.count == 3)
+        #expect(canvas.reports.last?.first?.before.count == 2)
+        #expect(canvas.reports.last?.first?.after.count == 2)
+    }
+
+    @Test func aShapeIsStillOneAfterItsPageStoredIt() async throws {
+        let canvas = try await CanvasHarness()
+        defer { canvas.close() }
+        let first = canvas.layout.frame(ofPageAt: 0)
+        let circle = RecognizedShape.ellipse(center: CGPoint(x: first.midX, y: first.minY + 300), semiAxes: CGSize(width: 80, height: 80), rotation: 0)
+        try await canvas.draw(PKStroke(circle, ink: PKInk(.monoline, color: .black), pointSize: 3, pointSpacing: 4))
+
+        let stored = try #require(canvas.reports.first?.first?.after.first)
+        let reloaded = try #require(try PKDrawing(data: PKDrawing(strokes: [stored]).dataRepresentation()).strokes.first)
+        guard case .ellipse(_, let semiAxes, _) = reloaded.shape else {
+            Issue.record("not an ellipse")
+            return
+        }
+        // The page keeps its ink in page points.
+        #expect(abs(semiAxes.width - 80 / PagedCanvasView.documentScale) < 0.01)
     }
 
     @Test func aHeldLineThatIsNoShapeStaysWithThePen() async throws {

@@ -30,6 +30,11 @@ public enum ShapeRecognizer {
         static let closedCorner: CGFloat = 0.06
         static let closedSideLength: CGFloat = 0.12
         static let closedError: CGFloat = 0.04
+        /// A round line that has no corners is an ellipse even when it is drawn this unevenly.
+        static let roundError: CGFloat = 0.06
+        /// How far the middles of a polygon's sides bow away from straight lines on average, as a
+        /// part of each side's length.
+        static let closedSideBow: CGFloat = 0.025
         /// A corner that turns less than this is none.
         static let cornerTurn: CGFloat = 30 * .pi / 180
         static let polygonCorners = 3...6
@@ -98,11 +103,10 @@ public enum ShapeRecognizer {
             return error * (1 + Tolerance.errorPerExtraCorner * CGFloat(corners.count - 3))
         } ?? .infinity
 
-        guard min(ellipseError, polygonError) <= Tolerance.closedError else { return nil }
-        if let polygon, polygonError < ellipseError {
+        if let polygon, polygonError < ellipseError, polygonError <= Tolerance.closedError {
             return .polyline(corners: rectangle(from: polygon) ?? straightened(polygon, isClosed: true), isClosed: true)
         }
-        return ellipse?.shape
+        return ellipseError <= (polygon == nil ? Tolerance.roundError : Tolerance.closedError) ? ellipse?.shape : nil
     }
 
     /// The corners of the polygon a closed line follows, each where the straight lines through its
@@ -144,12 +148,16 @@ public enum ShapeRecognizer {
               indices.indices.allSatisfy({ turn(at: $0) >= Tolerance.cornerTurn })
         else { return nil }
 
-        let lines = indices.indices.map { position in
+        let sides = indices.indices.map { position in
             let from = indices[position]
             var to = indices[(position + 1) % indices.count]
             if to <= from { to += count }
-            return FittedLine(through: (from...to).map { loop[$0 % count] })
+            return (from...to).map { loop[$0 % count] }
         }
+        let lines = sides.map(FittedLine.init(through:))
+        // A round line cut into sides bows away from every one of them.
+        let bow = zip(lines, sides).reduce(0) { $0 + $1.0.bow(of: $1.1) / $1.1[0].distance(to: $1.1[$1.1.count - 1]) }
+        guard bow / CGFloat(sides.count) <= Tolerance.closedSideBow else { return nil }
         return indices.indices.map { position in
             lines[(position + lines.count - 1) % lines.count]
                 .intersection(with: lines[position], near: loop[indices[position]], within: 0.2 * diagonal)

@@ -89,17 +89,18 @@ nonisolated extension PKStroke: @retroactive InkStroke {
 }
 
 extension PKStroke {
-    /// The stroke that draws a shape with the even line of a pen, as if the pen had drawn it.
+    /// The stroke that draws a shape with an even line.
     ///
-    /// - Parameter pointSpacing: How far apart the points of the stroke's path lie at most.
-    init(_ shape: RecognizedShape, drawnWith pen: PKInkingTool, pointSpacing: CGFloat) {
-        // PencilKit keeps a point two wider than the tool that drew it.
-        let size = pen.width + 2
+    /// - Parameters:
+    ///   - pointSize: The size of the stroke's points. PencilKit keeps a point two wider than the
+    ///     tool that drew it, and draws a line twice as wide as the size exceeds two.
+    ///   - pointSpacing: How far apart the points of the stroke's path lie at most.
+    init(_ shape: RecognizedShape, ink: PKInk, pointSize: CGFloat, pointSpacing: CGFloat) {
         let points = shape.splineControlPoints(spacing: pointSpacing).enumerated().map { index, location in
             PKStrokePoint(
                 location: location,
                 timeOffset: TimeInterval(index) * 0.005,
-                size: CGSize(width: size, height: size),
+                size: CGSize(width: pointSize, height: pointSize),
                 opacity: 1,
                 force: 0,
                 azimuth: 0,
@@ -107,7 +108,20 @@ extension PKStroke {
                 secondaryScale: 0.32
             )
         }
-        self.init(ink: pen.ink, path: PKStrokePath(controlPoints: points, creationDate: Date()))
+        self.init(ink: ink, path: PKStrokePath(controlPoints: points, creationDate: Date()))
+    }
+
+    /// The shape the stroke draws, in the coordinates of its drawing, if it was made from a shape
+    /// and is still whole.
+    var shape: RecognizedShape? {
+        guard mask == nil else { return nil }
+        return RecognizedShape(splineControlPoints: path.map { $0.location.applying(transform) })
+    }
+
+    /// The size a point needs in the coordinates of the drawing to draw a line as wide as this stroke's.
+    var pointSizeInDrawing: CGFloat {
+        let scale = sqrt(abs(transform.a * transform.d - transform.b * transform.c))
+        return 2 + scale * ((path.first?.size.width ?? 2) - 2)
     }
 }
 

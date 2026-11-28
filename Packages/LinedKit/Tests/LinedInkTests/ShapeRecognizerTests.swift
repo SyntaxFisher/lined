@@ -219,6 +219,85 @@ struct ShapeRecognizerTests {
         #expect(match(corners, drawn, within: 6))
     }
 
+    @Test(arguments: [3, 4, 5, 6] as [CGFloat])
+    func aLumpyRoundLineIsACircleAndNoPolygon(lumps: CGFloat) {
+        let drawn = (0...120).map { step in
+            let angle = 0.3 + 2 * CGFloat.pi * CGFloat(step) / 120
+            let radius = 150 * (1 + 0.035 * cos(lumps * angle))
+            return CGPoint(x: 400 + radius * cos(angle), y: 400 + radius * sin(angle))
+        }
+        guard case .ellipse = ShapeRecognizer.shape(for: drawn) else {
+            Issue.record("not an ellipse")
+            return
+        }
+    }
+
+    @Test func aSmallCircleHasPointsCloseEnoughToCloseSmoothly() {
+        let shape = RecognizedShape.ellipse(center: .zero, semiAxes: CGSize(width: 11, height: 11), rotation: 0)
+        #expect(shape.splineControlPoints(spacing: 4).count >= 72)
+    }
+
+    @Test(arguments: [
+        RecognizedShape.polyline(corners: [CGPoint(x: 3, y: 4), CGPoint(x: 90, y: 41)], isClosed: false),
+        .polyline(corners: [CGPoint(x: 3, y: 4), CGPoint(x: 90, y: 41), CGPoint(x: 20, y: 70)], isClosed: false),
+        .polyline(corners: [CGPoint(x: 3, y: 4), CGPoint(x: 90, y: 41), CGPoint(x: 20, y: 70)], isClosed: true),
+        .polyline(corners: [CGPoint(x: 0, y: 0), CGPoint(x: 90, y: 0), CGPoint(x: 90, y: 50), CGPoint(x: 0, y: 50)], isClosed: true),
+    ])
+    func aPolylineIsReadBackFromItsSpline(shape: RecognizedShape) {
+        #expect(RecognizedShape(splineControlPoints: shape.splineControlPoints(spacing: 4)) == shape)
+    }
+
+    @Test(arguments: [CGSize(width: 11, height: 11), CGSize(width: 200, height: 90)], [0, 0.7] as [CGFloat])
+    func anEllipseIsReadBackFromItsSpline(semiAxes: CGSize, rotation: CGFloat) throws {
+        let shape = RecognizedShape.ellipse(center: CGPoint(x: 50, y: 80), semiAxes: semiAxes, rotation: rotation)
+        guard case .ellipse(let center, let found, let turn) = RecognizedShape(splineControlPoints: shape.splineControlPoints(spacing: 4)) else {
+            Issue.record("not an ellipse")
+            return
+        }
+        #expect(center.distance(to: CGPoint(x: 50, y: 80)) < 0.001)
+        #expect(abs(found.width - semiAxes.width) < 0.001 && abs(found.height - semiAxes.height) < 0.001)
+        #expect(abs(turn - rotation) < 0.001)
+    }
+
+    @Test func aLineDrawnByHandIsNotReadAsAShape() {
+        #expect(RecognizedShape(splineControlPoints: Hand.line(through: [CGPoint(x: 20, y: 30), CGPoint(x: 320, y: 180)])) == nil)
+        #expect(RecognizedShape(splineControlPoints: Hand.ellipse(center: .zero, semiAxes: CGSize(width: 90, height: 90))) == nil)
+    }
+
+    @Test func pullingALineMovesItsEndAndKeepsItsStart() {
+        let line = RecognizedShape.polyline(corners: [CGPoint(x: 10, y: 10), CGPoint(x: 110, y: 10)], isClosed: false)
+        guard case .polyline(let corners, _) = line.pulled(from: CGPoint(x: 110, y: 10), to: CGPoint(x: 10, y: 210)) else { return }
+        #expect(corners[0].distance(to: CGPoint(x: 10, y: 10)) < 0.001)
+        #expect(corners[1].distance(to: CGPoint(x: 10, y: 210)) < 0.001)
+    }
+
+    @Test func pullingACircleChangesItsRadiusAboutItsMiddle() {
+        let circle = RecognizedShape.ellipse(center: CGPoint(x: 50, y: 50), semiAxes: CGSize(width: 20, height: 20), rotation: 0)
+        guard case .ellipse(let center, let semiAxes, _) = circle.pulled(from: CGPoint(x: 70, y: 50), to: CGPoint(x: 50, y: 110)) else { return }
+        #expect(center == CGPoint(x: 50, y: 50))
+        #expect(abs(semiAxes.width - 60) < 0.001 && abs(semiAxes.height - 60) < 0.001)
+    }
+
+    @Test func pullingATriangleTurnsAndScalesItAboutItsMiddle() {
+        let triangle = RecognizedShape.polyline(corners: [CGPoint(x: 0, y: -20), CGPoint(x: 20, y: 10), CGPoint(x: -20, y: 10)], isClosed: true)
+        let pulled = triangle.pulled(from: CGPoint(x: 0, y: -20), to: CGPoint(x: 40, y: 0))
+        #expect(pulled.anchor.distance(to: .zero) < 0.001)
+        guard case .polyline(let corners, _) = pulled else { return }
+        #expect(corners[0].distance(to: CGPoint(x: 40, y: 0)) < 0.001)
+        #expect(abs(corners[1].distance(to: corners[2]) - 80) < 0.001)
+    }
+
+    @Test func movingAHandleMovesACornerOrAnAxis() {
+        let triangle = RecognizedShape.polyline(corners: [.zero, CGPoint(x: 20, y: 0), CGPoint(x: 0, y: 20)], isClosed: true)
+        #expect(triangle.movingHandle(at: 1, to: CGPoint(x: 50, y: 5)).handles == [.zero, CGPoint(x: 50, y: 5), CGPoint(x: 0, y: 20)])
+
+        let ellipse = RecognizedShape.ellipse(center: .zero, semiAxes: CGSize(width: 40, height: 20), rotation: 0)
+        #expect(ellipse.handles[1] == CGPoint(x: 0, y: 20))
+        #expect(ellipse.movingHandle(at: 1, to: CGPoint(x: 0, y: 30)) == .ellipse(center: .zero, semiAxes: CGSize(width: 40, height: 30), rotation: 0))
+        let circle = RecognizedShape.ellipse(center: .zero, semiAxes: CGSize(width: 20, height: 20), rotation: 0)
+        #expect(circle.movingHandle(at: 2, to: CGPoint(x: -35, y: 0)) == .ellipse(center: .zero, semiAxes: CGSize(width: 35, height: 35), rotation: 0))
+    }
+
     @Test func theSplineOfAPolylineTurnsSharplyAtEveryCorner() {
         let shape = RecognizedShape.polyline(corners: [.zero, CGPoint(x: 10, y: 0), CGPoint(x: 10, y: 10)], isClosed: true)
         let points = shape.splineControlPoints(spacing: 4)

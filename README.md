@@ -13,7 +13,7 @@ Lined is in early development and not available yet.
 - Pages added after the current one or at the end of the page overview, on any paper or from a PDF, and rearranged by dragging them in the overview.
 - Handwriting with Apple Pencil on every page, sharp at any zoom, saved as you write.
 - A fineliner pen, an eraser and a lasso in a tool bar that docks to any edge of the screen.
-- Shapes: draw a line, circle, ellipse, triangle, rectangle or other polygon and hold the pen at the end, and it becomes the clean shape.
+- Shapes: draw a line, circle, ellipse, triangle, rectangle or other polygon and hold the pen at the end, and it becomes the clean shape. Keep the pen down to resize and turn it, or tap it later to drag its corners.
 
 ## Planned features
 

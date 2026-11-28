@@ -97,6 +97,7 @@ final class PagedCanvasView: UIView {
     private let pagesView = UIView()
     private let desk = DeskView()
     private let eraserIndicator = EraserIndicator()
+    private let shapeHandles = ShapeHandlesView()
     private let renderPool = BackgroundRenderPool()
 
     private var pages: [Page] = []
@@ -153,7 +154,11 @@ final class PagedCanvasView: UIView {
         canvas.addGestureRecognizer(undoTap)
         canvas.addGestureRecognizer(eraserGesture)
         canvas.addGestureRecognizer(penHold)
+        canvas.addGestureRecognizer(shapeTap)
         addSubview(eraserIndicator)
+        shapeHandles.frame = bounds
+        addSubview(shapeHandles)
+        wireShapeHandles()
 
         updateDeskColor()
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, _) in self.updateDeskColor() }
@@ -317,6 +322,7 @@ final class PagedCanvasView: UIView {
             )
         }
         showDesk(around: visible)
+        showShapeHandles()
         reportCurrentPage(in: visible)
         requestInk(around: visible)
         releaseDistantInk(isScrolling: isScrolling)
@@ -561,6 +567,9 @@ final class PagedCanvasView: UIView {
         }
         showArrivedInk()
         releaseDistantInk(isScrolling: isScrolling)
+        if let editedShape, !canvas.drawing.strokes.contains(where: { $0.id == editedShape.strokeID }) {
+            deselectShape()
+        }
         if hasErased {
             hasErased = false
             onEraseEnd?()
@@ -649,7 +658,7 @@ final class PagedCanvasView: UIView {
         canvas.drawingPolicy = .pencilOnly
         let writing = [UITouch.TouchType.pencil]
         #endif
-        for gesture in [eraserGesture, penHold] {
+        for gesture in [eraserGesture, penHold, shapeTap] {
             gesture.allowedTouchTypes = writing.map { NSNumber(value: $0.rawValue) }
         }
     }
@@ -662,6 +671,8 @@ final class PagedCanvasView: UIView {
         canvas.drawingGestureRecognizer.isEnabled = !isErasing
         eraserGesture.isEnabled = isErasing
         penHold.isEnabled = tools.tool == .pen
+        shapeTap.isEnabled = tools.tool == .pen
+        deselectShape()
         if isErasing {
             strokePoints.prepare(for: canvas.drawing.strokes)
         }
@@ -673,23 +684,54 @@ final class PagedCanvasView: UIView {
 
     // MARK: Shapes
 
-    /// A line shorter than this on the screen is writing, not a shape.
-    private static let shortestShape: CGFloat = 40
-    /// How far apart the points lie that a shape's line is made of, in document points.
-    private static let shapePointSpacing: CGFloat = 4
-
-    private lazy var penHold = PenHoldGestureRecognizer(coordinates: pagesView) { [weak self] line in
-        self?.snapToShape(line) ?? false
+    private enum ShapeMetrics {
+        /// A line shorter than this on the screen is writing, not a shape.
+        static let shortestLength: CGFloat = 40
+        /// How far apart the points lie that a shape's line is made of, in document points.
+        static let pointSpacing: CGFloat = 4
+        /// A tap this close to a shape's line on the screen takes hold of the shape.
+        static let tapReach: CGFloat = 14
     }
+
+    /// A shape in the canvas that is being changed, and the stroke that draws it now.
+    private struct ShapeInHand {
+        var shape: RecognizedShape
+        var strokeID: UUID
+        let ink: PKInk
+        let pointSize: CGFloat
+    }
+
+    /// The shape under the pen that made it, as it snapped. The pen pulls at it until it lifts.
+    private var heldShape: ShapeInHand?
+    /// The shape that was tapped and shows its handles.
+    private var editedShape: ShapeInHand?
+    private var strokeCountAtToolBegin = 0
+    /// Where a shape was tapped, in document points. The tap leaves a dot in the ink there, at once
+    /// or a moment later, which is taken out again.
+    private var tapWithDot: CGPoint?
+
+    private lazy var penHold = PenHoldGestureRecognizer(
+        coordinates: pagesView,
+        onHold: { [weak self] line in self?.snapToShape(line) ?? false },
+        onPull: { [weak self] grip, pen in self?.pullShape(from: grip, to: pen) },
+        onRelease: { [weak self] in self?.releaseShape() }
+    )
+
+    private lazy var shapeTap: UITapGestureRecognizer = {
+        let tap = UITapGestureRecognizer(target: self, action: #selector(tapShape(_:)))
+        tap.delegate = self
+        return tap
+    }()
 
     /// Replaces the line that the pen is drawing with the shape it comes closest to, if it is close
     /// to one. The pen's stroke ends there, and the shape is a stroke as if the pen had drawn it.
+    /// Until `releaseShape()`, the pen that drew it can pull at it.
     ///
     /// - Parameter line: The line so far, in document points.
     /// - Returns: Whether the line became a shape.
     func snapToShape(_ line: [CGPoint]) -> Bool {
         let length = zip(line, line.dropFirst()).reduce(0) { $0 + hypot($1.1.x - $1.0.x, $1.1.y - $1.0.y) }
-        guard isToolInUse, length * canvas.zoomScale >= Self.shortestShape,
+        guard isToolInUse, length * canvas.zoomScale >= ShapeMetrics.shortestLength,
               let pen = canvas.tool as? PKInkingTool,
               let shape = ShapeRecognizer.shape(for: line)
         else { return false }
@@ -697,15 +739,137 @@ final class PagedCanvasView: UIView {
         // A stroke whose gesture is switched off ends without leaving a trace in the ink.
         canvas.drawingGestureRecognizer.isEnabled = false
         canvas.drawingGestureRecognizer.isEnabled = true
-        isToolInUse = false
+        // The shape is still in the pen's hand.
+        isToolInUse = true
+        inkSettling?.cancel()
+        inkSettling = nil
 
+        let stroke = PKStroke(shape, ink: pen.ink, pointSize: pen.width + 2, pointSpacing: ShapeMetrics.pointSpacing)
         var drawing = canvas.drawing
-        drawing.strokes.append(PKStroke(shape, drawnWith: pen, pointSpacing: Self.shapePointSpacing))
+        drawing.strokes.append(stroke)
         canvas.drawing = drawing
+        heldShape = ShapeInHand(shape: shape, strokeID: stroke.id, ink: pen.ink, pointSize: pen.width + 2)
         if let end = line.last {
             UICanvasFeedbackGenerator(view: canvas).alignmentOccurred(at: pagesView.convert(end, to: canvas))
         }
         return true
+    }
+
+    /// Turns and scales the shape the pen holds, so that what was under the pen at `grip` follows
+    /// it to `pen`. Both in document points.
+    func pullShape(from grip: CGPoint, to pen: CGPoint) {
+        guard let held = heldShape else { return }
+        var pulled = held
+        pulled.shape = held.shape.pulled(from: grip, to: pen)
+        // The shape as it snapped stays the one that is pulled at.
+        heldShape?.strokeID = draw(pulled) ?? held.strokeID
+    }
+
+    /// The pen that held a shape has lifted.
+    func releaseShape() {
+        guard heldShape != nil else { return }
+        heldShape = nil
+        isToolInUse = false
+        settleInk()
+    }
+
+    /// Draws a shape in place of the stroke that drew it before.
+    ///
+    /// - Returns: The identifier of the new stroke, or `nil` when the old one is gone.
+    private func draw(_ shape: ShapeInHand) -> UUID? {
+        var drawing = canvas.drawing
+        guard let index = drawing.strokes.lastIndex(where: { $0.id == shape.strokeID }) else { return nil }
+        let stroke = PKStroke(shape.shape, ink: shape.ink, pointSize: shape.pointSize, pointSpacing: ShapeMetrics.pointSpacing)
+        drawing.strokes[index] = stroke
+        canvas.drawing = drawing
+        return stroke.id
+    }
+
+    /// A tap of the pen on the line of a shape shows the shape's handles; a tap elsewhere is a dot.
+    @objc private func tapShape(_ tap: UITapGestureRecognizer) {
+        selectShape(at: tap.location(in: pagesView))
+    }
+
+    /// Shows the handles of the topmost shape whose line passes `point`, in document points.
+    ///
+    /// - Returns: Whether there is such a shape.
+    @discardableResult
+    func selectShape(at point: CGPoint) -> Bool {
+        let reach = ShapeMetrics.tapReach / canvas.zoomScale
+        let hit = canvas.drawing.strokes.reversed().lazy
+            .filter { $0.renderBounds.insetBy(dx: -reach, dy: -reach).contains(point) }
+            .compactMap { stroke in stroke.shape.map { (stroke, $0) } }
+            .first { $0.1.distance(to: point) <= reach + $0.0.pointSizeInDrawing }
+        guard let (stroke, shape) = hit else { return false }
+
+        // The tap's own stroke ends here if it has not yet, and is taken out if it has.
+        canvas.drawingGestureRecognizer.isEnabled = false
+        canvas.drawingGestureRecognizer.isEnabled = true
+        tapWithDot = point
+        discardTapDot()
+        editedShape = ShapeInHand(shape: shape, strokeID: stroke.id, ink: stroke.ink, pointSize: stroke.pointSizeInDrawing)
+        showShapeHandles()
+        return true
+    }
+
+    private func discardTapDot() {
+        guard let tap = tapWithDot else { return }
+        let strokes = canvas.drawing.strokes
+        let reach = ShapeMetrics.tapReach / canvas.zoomScale
+        guard strokes.count == strokeCountAtToolBegin + 1, let dot = strokes.last?.renderBounds,
+              max(dot.width, dot.height) <= 2 * reach, dot.insetBy(dx: -reach, dy: -reach).contains(tap)
+        else { return }
+        tapWithDot = nil
+        let agrees = reportedInk
+        replaceInk(with: Array(strokes.dropLast()))
+        reportedInk = agrees
+    }
+
+    private func deselectShape() {
+        tapWithDot = nil
+        guard editedShape != nil else { return }
+        editedShape = nil
+        shapeHandles.show([])
+    }
+
+    /// Places the handles on the shape that was tapped, where it is on the screen now.
+    private func showShapeHandles() {
+        guard let editedShape else { return }
+        shapeHandles.show(editedShape.shape.handles.map { pagesView.convert($0, to: shapeHandles) })
+    }
+
+    private func wireShapeHandles() {
+        shapeHandles.onDragBegin = { [weak self] in
+            guard let self else { return }
+            // What was drawn before is a step of its own.
+            self.reportPendingInk()
+            self.isToolInUse = true
+            self.inkSettling?.cancel()
+            self.inkSettling = nil
+        }
+        shapeHandles.onDrag = { [weak self] index, place in
+            guard let self else { return }
+            self.moveShapeHandle(at: index, to: self.shapeHandles.convert(place, to: self.pagesView))
+        }
+        shapeHandles.onDragEnd = { [weak self] in
+            self?.isToolInUse = false
+            self?.settleInk()
+        }
+    }
+
+    /// Moves a handle of the tapped shape to `point`, in document points.
+    func moveShapeHandle(at index: Int, to point: CGPoint) {
+        guard var edited = editedShape else { return }
+        edited.shape = edited.shape.movingHandle(at: index, to: point)
+        guard let strokeID = draw(edited) else {
+            deselectShape()
+            return
+        }
+        edited.strokeID = strokeID
+        editedShape = edited
+        // The shape changed where it lies in the ink, beneath what was drawn after it.
+        reportedInk = nil
+        showShapeHandles()
     }
 
     // MARK: Erasing
@@ -732,6 +896,7 @@ final class PagedCanvasView: UIView {
                 inkSettling?.cancel()
                 inkSettling = nil
                 hasErased = true
+                deselectShape()
                 inkEraser = InkEraser(strokes: canvas.drawing.strokes, points: strokePoints)
                 onToolBegin?()
             }
@@ -842,6 +1007,7 @@ extension PagedCanvasView: PagedCanvasControlling {
     }
 
     func setInk(_ strokes: [PKStroke], for pageID: Page.ID) {
+        deselectShape()
         if arrivedInk[pageID] != nil {
             arrivedInk[pageID] = strokes
         }
@@ -871,6 +1037,8 @@ extension PagedCanvasView: PagedCanvasControlling {
 
 extension PagedCanvasView: PKCanvasViewDelegate {
     func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
+        deselectShape()
+        strokeCountAtToolBegin = canvasView.drawing.strokes.count
         isToolInUse = true
         inkSettling?.cancel()
         inkSettling = nil
@@ -879,6 +1047,8 @@ extension PagedCanvasView: PKCanvasViewDelegate {
 
 
     func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {
+        // A shape that has just snapped is still in the pen's hand.
+        guard heldShape == nil else { return }
         isToolInUse = false
         settleInk()
     }
@@ -888,6 +1058,7 @@ extension PagedCanvasView: PKCanvasViewDelegate {
     /// before it is reported; and while the writing goes on, nothing is to hold it up.
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
         guard !isReplacingInk else { return }
+        discardTapDot()
         // Only the pen leaves the ink beneath its strokes as it was.
         if !(canvasView.tool is PKInkingTool) {
             reportedInk = nil
@@ -976,10 +1147,12 @@ private final class InkCanvasView: PKCanvasView {
 
 extension PagedCanvasView: UIGestureRecognizerDelegate {
     /// The eraser lets the canvas scroll and zoom, so that a second finger can take over from it.
+    /// The tap on a shape is recognised beside the pen's own stroke.
     func gestureRecognizer(
         _ gestureRecognizer: UIGestureRecognizer,
         shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
     ) -> Bool {
-        gestureRecognizer === eraserGesture && (other === canvas.panGestureRecognizer || other === canvas.pinchGestureRecognizer)
+        gestureRecognizer === shapeTap
+            || gestureRecognizer === eraserGesture && (other === canvas.panGestureRecognizer || other === canvas.pinchGestureRecognizer)
     }
 }
