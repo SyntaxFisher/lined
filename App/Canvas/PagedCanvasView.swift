@@ -52,12 +52,6 @@ final class PagedCanvasView: UIView {
     /// Called with what the user set a double tap on Apple Pencil to do.
     var onPencilShortcut: ((PencilShortcut) -> Void)?
 
-    var allowsFingerDrawing = false {
-        didSet {
-            if allowsFingerDrawing != oldValue { applyInput() }
-        }
-    }
-
     var tools = ToolSettings() {
         didSet {
             if tools != oldValue { applyTool() }
@@ -644,11 +638,16 @@ final class PagedCanvasView: UIView {
 
     // MARK: Input
 
+    /// Only Apple Pencil writes; fingers scroll and zoom. The Simulator has no Apple Pencil, so a
+    /// finger or the pointer stands in for it there.
     private func applyInput() {
-        canvas.drawingPolicy = allowsFingerDrawing ? .anyInput : .pencilOnly
-        eraserGesture.allowedTouchTypes = allowsFingerDrawing
-            ? [UITouch.TouchType.pencil, .direct].map { NSNumber(value: $0.rawValue) }
-            : [NSNumber(value: UITouch.TouchType.pencil.rawValue)]
+        #if targetEnvironment(simulator)
+        canvas.drawingPolicy = .anyInput
+        eraserGesture.allowedTouchTypes = [UITouch.TouchType.pencil, .direct].map { NSNumber(value: $0.rawValue) }
+        #else
+        canvas.drawingPolicy = .pencilOnly
+        eraserGesture.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.pencil.rawValue)]
+        #endif
     }
 
     private func applyTool() {

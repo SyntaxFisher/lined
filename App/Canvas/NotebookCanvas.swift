@@ -5,7 +5,6 @@ import SwiftUI
 struct NotebookCanvas: UIViewRepresentable {
     let session: NotebookSession
     let tools: ToolSettings
-    let allowsFingerDrawing: Bool
     var onToolBegin: () -> Void = {}
     var onEraseEnd: () -> Void = {}
     var onPencilShortcut: (PencilShortcut) -> Void = { _ in }
@@ -18,7 +17,6 @@ struct NotebookCanvas: UIViewRepresentable {
     }
 
     func updateUIView(_ view: PagedCanvasView, context: Context) {
-        view.allowsFingerDrawing = allowsFingerDrawing
         view.tools = tools
         view.onToolBegin = onToolBegin
         view.onEraseEnd = onEraseEnd

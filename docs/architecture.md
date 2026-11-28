@@ -88,8 +88,8 @@ points per document point, and it ends at ten, which is as far as PencilKit magn
 - **PDF.** Pages are drawn with CoreGraphics from the stored PDF file. Nothing is pre-rasterized, so
   import is fast and the page stays vector-sharp at any zoom.
 
-Apple Pencil draws and fingers scroll and zoom. With finger drawing switched on, one finger draws
-and two fingers scroll and zoom.
+Only Apple Pencil draws; fingers scroll and zoom. The Simulator has no Apple Pencil, so there one
+finger draws and two fingers scroll and zoom.
 
 These properties of PencilKit shape the canvas:
 

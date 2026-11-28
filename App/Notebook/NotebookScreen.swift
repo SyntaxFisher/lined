@@ -43,7 +43,6 @@ private struct NotebookEditor: View {
     @Environment(LibraryModel.self) private var library
     @Environment(LibraryNavigator.self) private var navigator
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage(Preference.allowsFingerDrawing) private var allowsFingerDrawing = Preference.allowsFingerDrawingByDefault
     @State private var isShowingPages = false
     @State private var toolBar = ToolBarModel()
 
@@ -67,7 +66,6 @@ private struct NotebookEditor: View {
                 }
                 ToolbarSpacer(.fixed, placement: .topBarTrailing)
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Toggle("Draw with Finger", systemImage: "hand.draw", isOn: $allowsFingerDrawing)
                     AddPageMenu(session: session)
                     Button {
                         isShowingPages = true
@@ -121,7 +119,6 @@ private struct NotebookEditor: View {
         NotebookCanvas(
             session: session,
             tools: toolBar.settings,
-            allowsFingerDrawing: allowsFingerDrawing,
             onToolBegin: {
                 // Writing takes the options out of the way.
                 if toolBar.isShowingOptions {
